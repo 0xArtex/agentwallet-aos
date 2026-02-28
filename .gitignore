@@ -8,3 +8,4 @@ artifacts/
 typechain-types/
 target/
 .anchor/
+contracts/solana/target/

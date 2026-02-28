@@ -21,6 +21,12 @@ contract AgentWalletFactory {
     using Clones for address;
 
     address public immutable implementation;
+    address public admin;
+
+    // Gas seeding config
+    uint256 public gasSeedAmount = 0.001 ether;  // ~$2.50, covers ~2000 txs on Base
+    uint256 public maxGasPerWallet = 0.004 ether; // lifetime cap per wallet (~$10)
+    mapping(address => uint256) public gasSponsored; // total gas sent per wallet
 
     // wallet count per owner for salt uniqueness
     mapping(address => uint256) public walletCount;
@@ -35,13 +41,22 @@ contract AgentWalletFactory {
         address indexed agent,
         uint256 index
     );
+    event GasSeeded(address indexed wallet, uint256 amount);
+    event GasToppedUp(address indexed wallet, uint256 amount);
+    event GasConfigUpdated(uint256 seedAmount, uint256 maxPerWallet);
+
+    modifier onlyAdmin() {
+        require(msg.sender == admin, "AWF: not admin");
+        _;
+    }
 
     constructor() {
         implementation = address(new AgentWallet());
+        admin = msg.sender;
     }
 
     /**
-     * @notice Deploy a new AgentWallet.
+     * @notice Deploy a new AgentWallet with gas seeding.
      * @param owner_ The human owner address
      * @param agent_ The agent's public key (session key)
      * @return wallet The deployed wallet address
@@ -59,7 +74,70 @@ contract AgentWalletFactory {
         isWallet[wallet] = true;
         allWallets.push(wallet);
 
+        // Seed gas if factory has balance
+        if (address(this).balance >= gasSeedAmount && gasSeedAmount > 0) {
+            gasSponsored[wallet] += gasSeedAmount;
+            (bool ok, ) = wallet.call{value: gasSeedAmount}("");
+            if (ok) emit GasSeeded(wallet, gasSeedAmount);
+        }
+
         emit WalletCreated(wallet, owner_, agent_, idx);
+    }
+
+    /**
+     * @notice Top up gas for a wallet that's running low.
+     * @dev Only admin. Respects lifetime cap per wallet.
+     */
+    function topUpGas(address wallet) external onlyAdmin {
+        require(isWallet[wallet], "AWF: not a wallet");
+        require(gasSponsored[wallet] + gasSeedAmount <= maxGasPerWallet, "AWF: gas cap reached");
+        require(address(this).balance >= gasSeedAmount, "AWF: insufficient balance");
+
+        gasSponsored[wallet] += gasSeedAmount;
+        (bool ok, ) = wallet.call{value: gasSeedAmount}("");
+        require(ok, "AWF: transfer failed");
+        emit GasToppedUp(wallet, gasSeedAmount);
+    }
+
+    /**
+     * @notice Batch top-up for multiple wallets running low.
+     */
+    function batchTopUpGas(address[] calldata wallets) external onlyAdmin {
+        for (uint256 i = 0; i < wallets.length; i++) {
+            address w = wallets[i];
+            if (!isWallet[w]) continue;
+            if (gasSponsored[w] + gasSeedAmount > maxGasPerWallet) continue;
+            if (address(this).balance < gasSeedAmount) break;
+
+            gasSponsored[w] += gasSeedAmount;
+            (bool ok, ) = w.call{value: gasSeedAmount}("");
+            if (ok) emit GasToppedUp(w, gasSeedAmount);
+        }
+    }
+
+    /**
+     * @notice Update gas seeding config. Only admin.
+     */
+    function setGasConfig(uint256 seedAmount, uint256 maxPerWallet) external onlyAdmin {
+        gasSeedAmount = seedAmount;
+        maxGasPerWallet = maxPerWallet;
+        emit GasConfigUpdated(seedAmount, maxPerWallet);
+    }
+
+    /**
+     * @notice Transfer admin role.
+     */
+    function setAdmin(address newAdmin) external onlyAdmin {
+        require(newAdmin != address(0), "AWF: zero admin");
+        admin = newAdmin;
+    }
+
+    /**
+     * @notice Withdraw excess ETH from the factory. Only admin.
+     */
+    function withdrawGas(uint256 amount) external onlyAdmin {
+        (bool ok, ) = admin.call{value: amount}("");
+        require(ok, "AWF: withdraw failed");
     }
 
     /**
@@ -96,4 +174,9 @@ contract AgentWalletFactory {
         }
         return result;
     }
+
+    /**
+     * @notice Fund the factory's gas treasury.
+     */
+    receive() external payable {}
 }

@@ -20,11 +20,14 @@ contract AgentWalletTest is Test {
         factory = new AgentWalletFactory();
         usdc = new ERC20Mock("USDC", "USDC", 6);
 
-        // Deploy wallet
+        // Fund factory for gas seeding
+        vm.deal(address(factory), 1 ether);
+
+        // Deploy wallet (auto-seeded with gas)
         address w = factory.createWallet(human, agent);
         wallet = AgentWallet(payable(w));
 
-        // Fund wallet with ETH and USDC
+        // Fund wallet with extra ETH and USDC
         vm.deal(address(wallet), 10 ether);
         usdc.mint(address(wallet), 1000e6); // 1000 USDC
     }
@@ -252,6 +255,55 @@ contract AgentWalletTest is Test {
         factory.createWallet(human, agent2);
         assertEq(factory.totalWallets(), 2);
         assertEq(factory.walletCount(human), 2);
+    }
+
+    // ─── Gas Seeding ───
+
+    function test_walletSeededOnCreate() public {
+        vm.deal(address(factory), 1 ether);
+        address w2 = factory.createWallet(human, makeAddr("agent2"));
+        assertEq(factory.gasSponsored(w2), 0.001 ether);
+        assertGe(w2.balance, 0.001 ether);
+    }
+
+    function test_topUpGas() public {
+        address w2 = factory.createWallet(human, makeAddr("agent3"));
+        vm.deal(address(factory), 1 ether);
+        uint256 before_ = w2.balance;
+        factory.topUpGas(w2); // caller is this contract = admin
+        assertEq(w2.balance, before_ + 0.001 ether);
+    }
+
+    function test_gasCapEnforced() public {
+        address w2 = factory.createWallet(human, makeAddr("agent4"));
+        vm.deal(address(factory), 1 ether);
+        // Top up 3 more times (seed + 3 = 0.004 = max)
+        factory.topUpGas(w2);
+        factory.topUpGas(w2);
+        factory.topUpGas(w2);
+        // Next should fail
+        vm.expectRevert("AWF: gas cap reached");
+        factory.topUpGas(w2);
+    }
+
+    function test_batchTopUp() public {
+        address w2 = factory.createWallet(human, makeAddr("agent5"));
+        address w3 = factory.createWallet(human, makeAddr("agent6"));
+        vm.deal(address(factory), 1 ether);
+
+        address[] memory wallets_ = new address[](2);
+        wallets_[0] = w2;
+        wallets_[1] = w3;
+        factory.batchTopUpGas(wallets_);
+
+        assertEq(factory.gasSponsored(w2), 0.002 ether); // seed + topup
+        assertEq(factory.gasSponsored(w3), 0.002 ether);
+    }
+
+    function test_setGasConfig() public {
+        factory.setGasConfig(0.005 ether, 0.02 ether);
+        assertEq(factory.gasSeedAmount(), 0.005 ether);
+        assertEq(factory.maxGasPerWallet(), 0.02 ether);
     }
 
     // ─── Pending Tx Expiry ───
