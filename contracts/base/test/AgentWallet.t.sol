@@ -262,8 +262,8 @@ contract AgentWalletTest is Test {
     function test_walletSeededOnCreate() public {
         vm.deal(address(factory), 1 ether);
         address w2 = factory.createWallet(human, makeAddr("agent2"));
-        assertEq(factory.gasSponsored(w2), 0.001 ether);
-        assertGe(w2.balance, 0.001 ether);
+        assertEq(factory.gasSponsored(w2), 0.00002 ether);
+        assertGe(w2.balance, 0.00002 ether);
     }
 
     function test_topUpGas() public {
@@ -271,16 +271,14 @@ contract AgentWalletTest is Test {
         vm.deal(address(factory), 1 ether);
         uint256 before_ = w2.balance;
         factory.topUpGas(w2); // caller is this contract = admin
-        assertEq(w2.balance, before_ + 0.001 ether);
+        assertEq(w2.balance, before_ + 0.00002 ether);
     }
 
     function test_gasCapEnforced() public {
         address w2 = factory.createWallet(human, makeAddr("agent4"));
         vm.deal(address(factory), 1 ether);
-        // Top up 3 more times (seed + 3 = 0.004 = max)
-        factory.topUpGas(w2);
-        factory.topUpGas(w2);
-        factory.topUpGas(w2);
+        // Top up 9 more times (seed + 9 = 10 * 0.00002 = 0.0002 = max)
+        for (uint i = 0; i < 9; i++) factory.topUpGas(w2);
         // Next should fail
         vm.expectRevert("AWF: gas cap reached");
         factory.topUpGas(w2);
@@ -296,14 +294,14 @@ contract AgentWalletTest is Test {
         wallets_[1] = w3;
         factory.batchTopUpGas(wallets_);
 
-        assertEq(factory.gasSponsored(w2), 0.002 ether); // seed + topup
-        assertEq(factory.gasSponsored(w3), 0.002 ether);
+        assertEq(factory.gasSponsored(w2), 0.00004 ether); // seed + topup
+        assertEq(factory.gasSponsored(w3), 0.00004 ether);
     }
 
     function test_setGasConfig() public {
-        factory.setGasConfig(0.005 ether, 0.02 ether);
-        assertEq(factory.gasSeedAmount(), 0.005 ether);
-        assertEq(factory.maxGasPerWallet(), 0.02 ether);
+        factory.setGasConfig(0.0001 ether, 0.001 ether);
+        assertEq(factory.gasSeedAmount(), 0.0001 ether);
+        assertEq(factory.maxGasPerWallet(), 0.001 ether);
     }
 
     // ─── Pending Tx Expiry ───

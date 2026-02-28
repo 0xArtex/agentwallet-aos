@@ -24,8 +24,8 @@ contract AgentWalletFactory {
     address public admin;
 
     // Gas seeding config
-    uint256 public gasSeedAmount = 0.001 ether;  // ~$2.50, covers ~2000 txs on Base
-    uint256 public maxGasPerWallet = 0.004 ether; // lifetime cap per wallet (~$10)
+    uint256 public gasSeedAmount = 0.00002 ether;  // ~$0.05, covers ~20 txs on Base
+    uint256 public maxGasPerWallet = 0.0002 ether; // lifetime cap per wallet (~$0.50)
     mapping(address => uint256) public gasSponsored; // total gas sent per wallet
 
     // wallet count per owner for salt uniqueness
