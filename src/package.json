@@ -1,0 +1,23 @@
+{
+  "name": "agentwallet-aos",
+  "version": "0.1.0",
+  "description": "Non-custodial smart wallets for AI agents",
+  "type": "module",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/api/server.js"
+  },
+  "dependencies": {
+    "ethers": "^6.13",
+    "@solana/web3.js": "^1.98",
+    "@solana/spl-token": "^0.4",
+    "express": "^4.21",
+    "better-sqlite3": "^11.7",
+    "bs58": "^6.0"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0",
+    "@types/better-sqlite3": "^7.6",
+    "typescript": "^5.7"
+  }
+}
