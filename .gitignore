@@ -1,0 +1,10 @@
+node_modules/
+dist/
+.env
+*.log
+cache/
+out/
+artifacts/
+typechain-types/
+target/
+.anchor/
