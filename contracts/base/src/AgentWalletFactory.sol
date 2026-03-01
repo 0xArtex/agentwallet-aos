@@ -24,8 +24,7 @@ contract AgentWalletFactory {
     address public admin;
 
     // Gas seeding config
-    uint256 public gasSeedAmount = 0.00002 ether;  // ~$0.05, covers ~20 txs on Base
-    uint256 public maxGasPerWallet = 0.0002 ether; // lifetime cap per wallet (~$0.50)
+    uint256 public gasSeedAmount = 0.000028 ether;  // ~$0.07 total per wallet
     mapping(address => uint256) public gasSponsored; // total gas sent per wallet
 
     // wallet count per owner for salt uniqueness
@@ -86,11 +85,11 @@ contract AgentWalletFactory {
 
     /**
      * @notice Top up gas for a wallet that's running low.
-     * @dev Only admin. Respects lifetime cap per wallet.
+     * @dev Only admin. One-time seed only (no repeated top-ups).
      */
     function topUpGas(address wallet) external onlyAdmin {
         require(isWallet[wallet], "AWF: not a wallet");
-        require(gasSponsored[wallet] + gasSeedAmount <= maxGasPerWallet, "AWF: gas cap reached");
+        require(gasSponsored[wallet] == 0, "AWF: already seeded");
         require(address(this).balance >= gasSeedAmount, "AWF: insufficient balance");
 
         gasSponsored[wallet] += gasSeedAmount;
@@ -100,13 +99,13 @@ contract AgentWalletFactory {
     }
 
     /**
-     * @notice Batch top-up for multiple wallets running low.
+     * @notice Batch seed gas for wallets that haven't been seeded yet.
      */
     function batchTopUpGas(address[] calldata wallets) external onlyAdmin {
         for (uint256 i = 0; i < wallets.length; i++) {
             address w = wallets[i];
             if (!isWallet[w]) continue;
-            if (gasSponsored[w] + gasSeedAmount > maxGasPerWallet) continue;
+            if (gasSponsored[w] > 0) continue;
             if (address(this).balance < gasSeedAmount) break;
 
             gasSponsored[w] += gasSeedAmount;
@@ -116,12 +115,11 @@ contract AgentWalletFactory {
     }
 
     /**
-     * @notice Update gas seeding config. Only admin.
+     * @notice Update gas seed amount. Only admin.
      */
-    function setGasConfig(uint256 seedAmount, uint256 maxPerWallet) external onlyAdmin {
+    function setGasConfig(uint256 seedAmount) external onlyAdmin {
         gasSeedAmount = seedAmount;
-        maxGasPerWallet = maxPerWallet;
-        emit GasConfigUpdated(seedAmount, maxPerWallet);
+        emit GasConfigUpdated(seedAmount, 0);
     }
 
     /**

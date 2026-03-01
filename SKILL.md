@@ -43,7 +43,7 @@ Response:
 | Daily Limit | 50 USDC | Max spend per 24h rolling window |
 | Per-Tx Limit | 25 USDC | Max per single transaction |
 | Approval Threshold | 25 USDC | Above this → queued for human approval |
-| Gas Seed | ~$2.50 | Auto-funded on creation, covers ~2000 txs |
+| Gas Seed | ~$0.07 | Auto-funded on creation, covers ~140 txs |
 
 Agent can transact immediately. Human tunes policies later.
 
