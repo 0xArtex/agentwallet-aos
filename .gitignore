@@ -9,3 +9,4 @@ typechain-types/
 target/
 .anchor/
 contracts/solana/target/
+data/
