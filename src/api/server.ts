@@ -28,6 +28,7 @@ app.get("/health", (_req, res) => {
   res.json({ status: "ok", chains: { base: !!baseClient, solana: false } });
 });
 
+
 // ─── Create Wallet ───
 app.post("/wallet", requireBase, async (req, res) => {
   const { owner, agent } = req.body;
@@ -35,6 +36,8 @@ app.post("/wallet", requireBase, async (req, res) => {
 
   try {
     const address = await baseClient!.createWallet(owner, agent);
+    // Wait for state to propagate on testnet
+    await new Promise(r => setTimeout(r, 2000));
     const info = await baseClient!.getWallet(address);
     res.json({ wallet: info });
   } catch (err: any) {
