@@ -39,21 +39,22 @@ export class BaseWalletClient {
 
     const event = receipt.logs.find((log: any) => {
       try {
-        return this.factory.interface.parseLog(log)?.name === "WalletCreated";
+        return this.factory.interface.parseLog({ topics: log.topics as string[], data: log.data })?.name === "WalletCreated";
       } catch { return false; }
     });
 
     if (event) {
-      return this.factory.interface.parseLog(event)!.args.wallet;
+      const parsed = this.factory.interface.parseLog({ topics: event.topics as string[], data: event.data });
+      return parsed!.args.wallet;
     }
 
     const index = await this.factory.walletCount(ownerAddress);
-    return this.factory.getAddress(ownerAddress, agentAddress, index - 1n);
+    return (this.factory as any).getAddress(ownerAddress, agentAddress, index - 1n);
   }
 
   async predictAddress(ownerAddress: string, agentAddress: string): Promise<string> {
     const index = await this.factory.walletCount(ownerAddress);
-    return this.factory.getAddress(ownerAddress, agentAddress, index);
+    return (this.factory as any).getAddress(ownerAddress, agentAddress, index);
   }
 
   async getWallet(walletAddress: string): Promise<WalletInfo> {
