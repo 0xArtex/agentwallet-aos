@@ -37,19 +37,39 @@ app.get("/health", (_req, res) => {
 });
 
 
-// ─── Create Wallet ───
+// ─── Create Wallet (unified) ───
+// POST /wallet {agent, mode: "managed"|"unmanaged"}
+// Defaults to managed if mode not specified
 app.post("/wallet", requireBase, async (req, res) => {
-  const { owner, agent } = req.body;
-  if (!owner || !agent) return res.status(400).json({ error: "owner and agent required" });
+  const { agent, mode = "managed" } = req.body;
+  if (!agent) return res.status(400).json({ error: "agent address required" });
 
-  try {
-    const address = await baseClient!.createWallet(owner, agent);
-    // Wait for state to propagate on testnet
-    await new Promise(r => setTimeout(r, 2000));
-    const info = await baseClient!.getWallet(address);
-    res.json({ wallet: info });
-  } catch (err: any) {
-    res.status(500).json({ error: err.message });
+  if (mode === "managed") {
+    try {
+      const address = await baseClient!.createManagedWallet(agent);
+      await new Promise(r => setTimeout(r, 2000));
+      const info = await baseClient!.getWallet(address);
+      const token = crypto.randomBytes(32).toString("hex");
+      setupTokens.set(token, { wallet: address, agent, createdAt: Date.now() });
+      setTimeout(() => setupTokens.delete(token), 86400000);
+      // Always use agntos.dev for public URLs since we're behind a proxy
+      const baseUrl = process.env.BASE_URL || "https://agntos.dev";
+      const setupUrl = `${baseUrl}/wallet/setup?token=${token}&wallet=${address}`;
+      res.json({ wallet: info, setupUrl, setupToken: token, mode: "managed" });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  } else if (mode === "unmanaged") {
+    try {
+      const address = await baseClient!.createUnmanagedWallet(agent);
+      await new Promise(r => setTimeout(r, 2000));
+      const info = await baseClient!.getWallet(address);
+      res.json({ wallet: info, mode: "unmanaged" });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  } else {
+    res.status(400).json({ error: "mode must be 'managed' or 'unmanaged'" });
   }
 });
 
@@ -145,50 +165,7 @@ app.get("/stats", requireBase, async (_req, res) => {
   }
 });
 
-// ─── Managed Wallet Creation ───
-app.post("/wallet/managed", requireBase, async (req, res) => {
-  const { agent } = req.body;
-  if (!agent) return res.status(400).json({ error: "agent address required" });
-
-  try {
-    const address = await baseClient!.createManagedWallet(agent);
-    await new Promise(r => setTimeout(r, 2000));
-    const info = await baseClient!.getWallet(address);
-
-    // Generate setup token
-    const token = crypto.randomBytes(32).toString("hex");
-    setupTokens.set(token, { wallet: address, agent, createdAt: Date.now() });
-
-    // Expire after 24h
-    setTimeout(() => setupTokens.delete(token), 86400000);
-
-    const setupUrl = `${req.protocol}://${req.get("host")}/setup?token=${token}&wallet=${address}`;
-
-    res.json({
-      wallet: info,
-      setupUrl,
-      setupToken: token,
-      message: "Send the setup URL to your human to register their passkey and set limits"
-    });
-  } catch (err: any) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// ─── Unmanaged Wallet Creation ───
-app.post("/wallet/unmanaged", requireBase, async (req, res) => {
-  const { agent } = req.body;
-  if (!agent) return res.status(400).json({ error: "agent address required" });
-
-  try {
-    const address = await baseClient!.createUnmanagedWallet(agent);
-    await new Promise(r => setTimeout(r, 2000));
-    const info = await baseClient!.getWallet(address);
-    res.json({ wallet: info, message: "Unmanaged wallet — no limits, agent has full control" });
-  } catch (err: any) {
-    res.status(500).json({ error: err.message });
-  }
-});
+// (managed/unmanaged routes merged into POST /wallet above)
 
 // ─── Setup Page ───
 app.get("/setup", (_req, res) => {
