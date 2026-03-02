@@ -55,9 +55,32 @@ contract AgentWalletFactory {
     }
 
     /**
-     * @notice Deploy a new AgentWallet with gas seeding.
+     * @notice Deploy a managed wallet (passkey owner, set up later via link).
+     * @dev Initializes with admin as temporary owner. Human registers passkey via setup page.
+     * @param agent_ The agent's public key
+     * @return wallet The deployed wallet address
+     */
+    function createManagedWallet(
+        address agent_
+    ) external returns (address wallet) {
+        uint256 idx = walletCount[admin]++;
+        bytes32 salt = keccak256(abi.encodePacked(admin, agent_, idx));
+
+        wallet = implementation.cloneDeterministic(salt);
+        // Initialize with admin as temp owner — passkey registered later via setup link
+        AgentWallet(payable(wallet)).initialize(admin, agent_);
+
+        isWallet[wallet] = true;
+        allWallets.push(wallet);
+
+        _seedGas(wallet);
+        emit WalletCreated(wallet, admin, agent_, idx);
+    }
+
+    /**
+     * @notice Deploy a wallet with EOA owner (self-custody mode).
      * @param owner_ The human owner address
-     * @param agent_ The agent's public key (session key)
+     * @param agent_ The agent's public key
      * @return wallet The deployed wallet address
      */
     function createWallet(
@@ -73,14 +96,38 @@ contract AgentWalletFactory {
         isWallet[wallet] = true;
         allWallets.push(wallet);
 
-        // Seed gas if factory has balance
+        _seedGas(wallet);
+        emit WalletCreated(wallet, owner_, agent_, idx);
+    }
+
+    /**
+     * @notice Deploy an unmanaged wallet (no owner, no limits, agent has full control).
+     * @param agent_ The agent's address (becomes both owner and agent)
+     * @return wallet The deployed wallet address
+     */
+    function createUnmanagedWallet(
+        address agent_
+    ) external returns (address wallet) {
+        uint256 idx = walletCount[agent_]++;
+        bytes32 salt = keccak256(abi.encodePacked(agent_, agent_, idx));
+
+        wallet = implementation.cloneDeterministic(salt);
+        // Agent is its own owner — can change any policy itself
+        AgentWallet(payable(wallet)).initialize(agent_, agent_);
+
+        isWallet[wallet] = true;
+        allWallets.push(wallet);
+
+        _seedGas(wallet);
+        emit WalletCreated(wallet, agent_, agent_, idx);
+    }
+
+    function _seedGas(address wallet) internal {
         if (address(this).balance >= gasSeedAmount && gasSeedAmount > 0) {
             gasSponsored[wallet] += gasSeedAmount;
             (bool ok, ) = wallet.call{value: gasSeedAmount}("");
             if (ok) emit GasSeeded(wallet, gasSeedAmount);
         }
-
-        emit WalletCreated(wallet, owner_, agent_, idx);
     }
 
     /**

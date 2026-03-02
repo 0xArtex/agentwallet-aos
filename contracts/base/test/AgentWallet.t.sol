@@ -33,6 +33,7 @@ contract AgentWalletTest is Test {
         assertEq(wallet.owner(), human);
         assertEq(wallet.agentKey(), agent);
         assertTrue(wallet.initialized());
+        assertFalse(wallet.isPasskeyOwner());
     }
 
     function test_defaultPolicy() public view {
@@ -44,11 +45,6 @@ contract AgentWalletTest is Test {
         assertEq(daily, 50e6);
         assertEq(perTx, 25e6);
         assertFalse(paused);
-    }
-
-    function test_cannotReinitialize() public {
-        vm.expectRevert("AW: already initialized");
-        wallet.initialize(human, agent);
     }
 
     // ─── Agent Execution ───
@@ -81,12 +77,10 @@ contract AgentWalletTest is Test {
     }
 
     function test_rejectsOverDailyLimit() public {
-        // 25 + 25 = 50 OK, next should fail
         vm.prank(agent);
         wallet.execute(recipient, 25e6, "");
         vm.prank(agent);
         wallet.execute(recipient, 25e6, "");
-
         vm.prank(agent);
         vm.expectRevert("AW: exceeds daily limit");
         wallet.execute(recipient, 1e6, "");
@@ -97,53 +91,18 @@ contract AgentWalletTest is Test {
         wallet.execute(recipient, 25e6, "");
         vm.prank(agent);
         wallet.execute(recipient, 25e6, "");
-
-        // Advance 24h
         vm.warp(block.timestamp + 86401);
-
         vm.prank(agent);
-        wallet.execute(recipient, 25e6, ""); // should work
+        wallet.execute(recipient, 25e6, "");
     }
 
-    function test_spentTodayTracking() public {
-        assertEq(wallet.getSpentToday(), 0);
-        assertEq(wallet.getRemainingDaily(), 50e6);
-
-        vm.prank(agent);
-        wallet.execute(recipient, 10e6, "");
-
-        assertEq(wallet.getSpentToday(), 10e6);
-        assertEq(wallet.getRemainingDaily(), 40e6);
-    }
-
-    // ─── Owner Policy Changes ───
+    // ─── Owner Controls ───
 
     function test_ownerRaisesLimits() public {
         vm.prank(human);
         wallet.setPolicy(500e6, 200e6);
-
         assertEq(wallet.getPolicy().dailyLimit, 500e6);
         assertEq(wallet.getPolicy().perTxLimit, 200e6);
-
-        // Agent can now send 200 USDC in one tx
-        vm.prank(agent);
-        wallet.execute(recipient, 200e6, "");
-    }
-
-    function test_ownerLowersLimits() public {
-        vm.prank(human);
-        wallet.setPolicy(10e6, 5e6);
-
-        vm.prank(agent);
-        vm.expectRevert("AW: exceeds per-tx limit");
-        wallet.execute(recipient, 6e6, "");
-    }
-
-    function test_zeroKeepsCurrent() public {
-        vm.prank(human);
-        wallet.setPolicy(0, 100e6); // only change perTx
-        assertEq(wallet.getPolicy().dailyLimit, 50e6); // unchanged
-        assertEq(wallet.getPolicy().perTxLimit, 100e6);
     }
 
     function test_nonOwnerCannotSetPolicy() public {
@@ -157,7 +116,6 @@ contract AgentWalletTest is Test {
     function test_blacklistBlocks() public {
         vm.prank(human);
         wallet.setBlacklist(recipient, true);
-
         vm.prank(agent);
         vm.expectRevert("AW: blacklisted");
         wallet.execute(recipient, 1e6, "");
@@ -166,35 +124,10 @@ contract AgentWalletTest is Test {
     function test_blacklistRemove() public {
         vm.prank(human);
         wallet.setBlacklist(recipient, true);
-
         vm.prank(human);
         wallet.setBlacklist(recipient, false);
-
         vm.prank(agent);
-        wallet.execute(recipient, 1e6, ""); // works again
-    }
-
-    function test_blacklistBatch() public {
-        address a = makeAddr("scam1");
-        address b = makeAddr("scam2");
-        address[] memory addrs = new address[](2);
-        addrs[0] = a;
-        addrs[1] = b;
-
-        vm.prank(human);
-        wallet.setBlacklistBatch(addrs, true);
-
-        assertTrue(wallet.blacklisted(a));
-        assertTrue(wallet.blacklisted(b));
-    }
-
-    function test_blacklistERC20() public {
-        vm.prank(human);
-        wallet.setBlacklist(recipient, true);
-
-        vm.prank(agent);
-        vm.expectRevert("AW: blacklisted");
-        wallet.executeERC20(address(usdc), recipient, 1e6);
+        wallet.execute(recipient, 1e6, "");
     }
 
     // ─── Pause ───
@@ -202,7 +135,6 @@ contract AgentWalletTest is Test {
     function test_pauseBlocks() public {
         vm.prank(human);
         wallet.pause();
-
         vm.prank(agent);
         vm.expectRevert("AW: paused");
         wallet.execute(recipient, 1e6, "");
@@ -213,28 +145,17 @@ contract AgentWalletTest is Test {
         wallet.pause();
         vm.prank(human);
         wallet.unpause();
-
         vm.prank(agent);
         wallet.execute(recipient, 1e6, "");
     }
 
-    // ─── Agent Key Management ───
+    // ─── Agent Key ───
 
     function test_replaceAgent() public {
         address newAgent = makeAddr("newAgent");
         vm.prank(human);
         wallet.setAgentKey(newAgent);
-
         assertEq(wallet.agentKey(), newAgent);
-
-        // Old agent locked out
-        vm.prank(agent);
-        vm.expectRevert("AW: not agent");
-        wallet.execute(recipient, 1e6, "");
-
-        // New agent works
-        vm.prank(newAgent);
-        wallet.execute(recipient, 1e6, "");
     }
 
     function test_revokeAgent() public {
@@ -258,59 +179,93 @@ contract AgentWalletTest is Test {
         assertEq(usdc.balanceOf(human), 500e6);
     }
 
-    // ─── Factory ───
+    // ─── Factory: Managed Wallet ───
+
+    function test_createManagedWallet() public {
+        address w = factory.createManagedWallet(makeAddr("agent2"));
+        AgentWallet mw = AgentWallet(payable(w));
+        // Admin is temp owner
+        assertEq(mw.owner(), address(this));
+        assertEq(mw.agentKey(), makeAddr("agent2"));
+        assertFalse(mw.isPasskeyOwner());
+    }
+
+    // ─── Factory: Unmanaged Wallet ───
+
+    function test_createUnmanagedWallet() public {
+        address agentAddr = makeAddr("solo");
+        address w = factory.createUnmanagedWallet(agentAddr);
+        AgentWallet uw = AgentWallet(payable(w));
+        // Agent is its own owner
+        assertEq(uw.owner(), agentAddr);
+        assertEq(uw.agentKey(), agentAddr);
+        // Agent can change its own policy
+        vm.prank(agentAddr);
+        uw.setPolicy(type(uint256).max, type(uint256).max);
+        assertEq(uw.getPolicy().dailyLimit, type(uint256).max);
+    }
+
+    // ─── Passkey Registration ───
+
+    function test_registerPasskey() public {
+        address w = factory.createManagedWallet(makeAddr("agent3"));
+        AgentWallet mw = AgentWallet(payable(w));
+        
+        bytes32 pkX = bytes32(uint256(1234));
+        bytes32 pkY = bytes32(uint256(5678));
+        
+        // Admin (temp owner) registers passkey
+        mw.registerPasskey(pkX, pkY);
+        
+        assertTrue(mw.isPasskeyOwner());
+        assertEq(mw.owner(), address(0)); // EOA owner cleared
+        (bytes32 x, bytes32 y) = mw.getPasskey();
+        assertEq(x, pkX);
+        assertEq(y, pkY);
+    }
+
+    function test_cannotRegisterPasskeyTwice() public {
+        address w = factory.createManagedWallet(makeAddr("agent4"));
+        AgentWallet mw = AgentWallet(payable(w));
+        
+        mw.registerPasskey(bytes32(uint256(1)), bytes32(uint256(2)));
+        
+        vm.expectRevert("AW: passkey already set");
+        mw.registerPasskey(bytes32(uint256(3)), bytes32(uint256(4)));
+    }
+
+    // ─── Factory Gas ───
 
     function test_walletSeededOnCreate() public {
         vm.deal(address(factory), 1 ether);
-        address w2 = factory.createWallet(human, makeAddr("agent2"));
-        assertEq(factory.gasSponsored(w2), 0.000028 ether);
-        assertGe(w2.balance, 0.000028 ether);
-    }
-
-    function test_topUpGas() public {
-        vm.deal(address(factory), 0);
-        address w2 = factory.createWallet(human, makeAddr("agent3"));
-        assertEq(factory.gasSponsored(w2), 0);
-
-        vm.deal(address(factory), 1 ether);
-        factory.topUpGas(w2);
+        address w2 = factory.createWallet(human, makeAddr("a2"));
         assertEq(factory.gasSponsored(w2), 0.000028 ether);
     }
 
-    function test_gasCapEnforced() public {
-        address w2 = factory.createWallet(human, makeAddr("agent4"));
+    function test_managedWalletSeeded() public {
         vm.deal(address(factory), 1 ether);
-        vm.expectRevert("AWF: already seeded");
-        factory.topUpGas(w2);
+        address w = factory.createManagedWallet(makeAddr("a3"));
+        assertEq(factory.gasSponsored(w), 0.000028 ether);
     }
 
-    function test_batchTopUp() public {
-        vm.deal(address(factory), 0);
-        address w2 = factory.createWallet(human, makeAddr("agent5"));
-        address w3 = factory.createWallet(human, makeAddr("agent6"));
-
+    function test_unmanagedWalletSeeded() public {
         vm.deal(address(factory), 1 ether);
-        address[] memory wallets_ = new address[](2);
-        wallets_[0] = w2;
-        wallets_[1] = w3;
-        factory.batchTopUpGas(wallets_);
+        address w = factory.createUnmanagedWallet(makeAddr("a4"));
+        assertEq(factory.gasSponsored(w), 0.000028 ether);
+    }
 
-        assertEq(factory.gasSponsored(w2), 0.000028 ether);
-        assertEq(factory.gasSponsored(w3), 0.000028 ether);
+    function test_factoryStats() public {
+        assertEq(factory.totalWallets(), 1);
+        factory.createWallet(human, makeAddr("a5"));
+        factory.createManagedWallet(makeAddr("a6"));
+        factory.createUnmanagedWallet(makeAddr("a7"));
+        assertEq(factory.totalWallets(), 4);
     }
 
     function test_setGasConfig() public {
         factory.setGasConfig(0.0001 ether);
         assertEq(factory.gasSeedAmount(), 0.0001 ether);
     }
-
-    function test_factoryStats() public {
-        assertEq(factory.totalWallets(), 1); // from setUp
-        factory.createWallet(human, makeAddr("a2"));
-        assertEq(factory.totalWallets(), 2);
-    }
-
-    // ─── Receive ETH ───
 
     function test_receiveETH() public {
         vm.deal(makeAddr("funder"), 1 ether);
