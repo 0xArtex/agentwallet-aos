@@ -33,6 +33,35 @@ export class BaseWalletClient {
     this.factory = new Contract(factoryAddress, FACTORY_ABI, this.adminWallet);
   }
 
+  async createManagedWallet(agentAddress: string): Promise<string> {
+    const tx = await this.factory.createManagedWallet(agentAddress);
+    const receipt = await tx.wait();
+    return this.extractWalletAddress(receipt) || agentAddress;
+  }
+
+  async createUnmanagedWallet(agentAddress: string): Promise<string> {
+    const tx = await this.factory.createUnmanagedWallet(agentAddress);
+    const receipt = await tx.wait();
+    return this.extractWalletAddress(receipt) || agentAddress;
+  }
+
+  async registerPasskey(walletAddress: string, pubKeyX: string, pubKeyY: string): Promise<string> {
+    const wallet = new Contract(walletAddress, WALLET_ABI, this.adminWallet);
+    const tx = await wallet.registerPasskey(pubKeyX, pubKeyY);
+    return (await tx.wait()).hash;
+  }
+
+  private extractWalletAddress(receipt: any): string | null {
+    const event = receipt.logs.find((log: any) => {
+      try { return this.factory.interface.parseLog({ topics: log.topics, data: log.data })?.name === "WalletCreated"; }
+      catch { return false; }
+    });
+    if (event) {
+      return this.factory.interface.parseLog({ topics: event.topics, data: event.data })!.args.wallet;
+    }
+    return null;
+  }
+
   async createWallet(ownerAddress: string, agentAddress: string): Promise<string> {
     const tx = await this.factory.createWallet(ownerAddress, agentAddress);
     const receipt = await tx.wait();

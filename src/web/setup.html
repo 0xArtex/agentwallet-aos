@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AgentWallet Setup</title>
+<style>
+  :root { --bg: #0a0b0f; --card: #12141a; --border: #1e2028; --text: #e4e4e7; --dim: #71717a; --accent: #f54900; --green: #3fb950; }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: 'Inter', -apple-system, sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; display: flex; align-items: center; justify-content: center; }
+  .container { max-width: 480px; width: 100%; padding: 20px; }
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: 16px; padding: 32px; margin-bottom: 16px; }
+  h1 { font-size: 24px; font-weight: 700; margin-bottom: 8px; }
+  .subtitle { color: var(--dim); font-size: 14px; margin-bottom: 24px; line-height: 1.5; }
+  .wallet-addr { font-family: 'JetBrains Mono', monospace; font-size: 13px; color: var(--dim); background: var(--bg); padding: 8px 12px; border-radius: 8px; margin-bottom: 24px; word-break: break-all; }
+  .step { display: none; }
+  .step.active { display: block; }
+  .step-indicator { display: flex; gap: 8px; margin-bottom: 24px; }
+  .step-dot { width: 32px; height: 4px; border-radius: 2px; background: var(--border); transition: background 0.3s; }
+  .step-dot.active { background: var(--accent); }
+  .step-dot.done { background: var(--green); }
+  label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 6px; color: var(--dim); text-transform: uppercase; letter-spacing: 0.5px; }
+  input[type="number"] { width: 100%; background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 12px; color: var(--text); font-size: 16px; font-family: 'JetBrains Mono', monospace; outline: none; margin-bottom: 16px; }
+  input:focus { border-color: var(--accent); }
+  .hint { font-size: 12px; color: var(--dim); margin-top: -12px; margin-bottom: 16px; }
+  .btn { width: 100%; padding: 14px; border: none; border-radius: 10px; font-size: 15px; font-weight: 600; cursor: pointer; transition: opacity 0.2s; }
+  .btn:hover { opacity: 0.9; }
+  .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+  .btn-primary { background: var(--accent); color: white; }
+  .btn-passkey { background: white; color: #000; display: flex; align-items: center; justify-content: center; gap: 10px; }
+  .btn-passkey svg { width: 20px; height: 20px; }
+  .success { text-align: center; }
+  .success .icon { font-size: 48px; margin-bottom: 16px; }
+  .success h2 { font-size: 20px; margin-bottom: 8px; }
+  .success p { color: var(--dim); font-size: 14px; }
+  .error { background: #2d1214; border: 1px solid #5c2124; color: #f87171; padding: 12px; border-radius: 8px; font-size: 13px; margin-bottom: 16px; display: none; }
+  .loading { display: inline-block; width: 16px; height: 16px; border: 2px solid rgba(255,255,255,0.3); border-top-color: white; border-radius: 50%; animation: spin 0.6s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+<div class="container">
+  <div class="card">
+    <div class="step-indicator">
+      <div class="step-dot active" id="dot1"></div>
+      <div class="step-dot" id="dot2"></div>
+      <div class="step-dot" id="dot3"></div>
+    </div>
+
+    <!-- Step 1: Register Passkey -->
+    <div class="step active" id="step1">
+      <h1>Set up your wallet</h1>
+      <p class="subtitle">Your agent created a wallet and needs you to secure it. Register a passkey (FaceID, fingerprint, YubiKey, or Ledger) — this becomes your master key.</p>
+      <div class="wallet-addr" id="walletAddr">Loading...</div>
+      <div class="error" id="error1"></div>
+      <button class="btn btn-passkey" id="btnPasskey" onclick="registerPasskey()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 11c0 3.517-1.009 6.799-2.753 9.571m-3.44-2.04l.054-.09A13.916 13.916 0 008 11a4 4 0 118 0c0 1.017-.07 2.019-.203 3m-2.118 6.844A21.88 21.88 0 0015.171 17m3.839 1.132c.645-2.266.99-4.659.99-7.132A8 8 0 008 4.07M3 15.364c.64-1.319 1-2.8 1-4.364 0-1.457.39-2.823 1.07-4"/></svg>
+        Register Passkey
+      </button>
+    </div>
+
+    <!-- Step 2: Set Limits -->
+    <div class="step" id="step2">
+      <h1>Set spending limits</h1>
+      <p class="subtitle">These limits protect you. Your agent can spend up to these amounts without needing your approval. You can change them anytime.</p>
+      <div class="error" id="error2"></div>
+      <label>Daily limit (USDC)</label>
+      <input type="number" id="dailyLimit" value="50" min="1" placeholder="50">
+      <p class="hint">Max your agent can spend per day</p>
+      <label>Per-transaction limit (USDC)</label>
+      <input type="number" id="perTxLimit" value="25" min="1" placeholder="25">
+      <p class="hint">Max per single transaction</p>
+      <button class="btn btn-primary" onclick="saveLimits()">Save Limits</button>
+    </div>
+
+    <!-- Step 3: Done -->
+    <div class="step" id="step3">
+      <div class="success">
+        <div class="icon">&#x2713;</div>
+        <h2>Wallet secured</h2>
+        <p>Your passkey is registered and limits are set. Your agent can now transact within the limits you configured. You can close this page.</p>
+        <div class="wallet-addr" id="walletAddrFinal" style="margin-top:16px"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const API = window.location.origin;
+const params = new URLSearchParams(window.location.search);
+const setupToken = params.get('token');
+const walletAddress = params.get('wallet');
+
+let credential = null;
+let pubKeyXY = null;
+
+document.getElementById('walletAddr').textContent = walletAddress || 'Unknown';
+document.getElementById('walletAddrFinal').textContent = walletAddress || '';
+
+function showError(stepId, msg) {
+  const el = document.getElementById('error' + stepId);
+  el.textContent = msg;
+  el.style.display = 'block';
+}
+
+function goStep(n) {
+  document.querySelectorAll('.step').forEach(s => s.classList.remove('active'));
+  document.getElementById('step' + n).classList.add('active');
+  for (let i = 1; i <= 3; i++) {
+    const dot = document.getElementById('dot' + i);
+    dot.classList.remove('active', 'done');
+    if (i < n) dot.classList.add('done');
+    if (i === n) dot.classList.add('active');
+  }
+}
+
+async function registerPasskey() {
+  const btn = document.getElementById('btnPasskey');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="loading"></span> Waiting for device...';
+
+  try {
+    // Generate challenge from wallet address + timestamp
+    const challenge = new TextEncoder().encode(walletAddress + ':' + Date.now());
+
+    const createOptions = {
+      publicKey: {
+        challenge: challenge,
+        rp: { name: "AgentWallet", id: window.location.hostname },
+        user: {
+          id: new TextEncoder().encode(walletAddress),
+          name: walletAddress,
+          displayName: "Agent Wallet Owner"
+        },
+        pubKeyCredParams: [
+          { alg: -7, type: "public-key" }  // ES256 = P-256
+        ],
+        authenticatorSelection: {
+          userVerification: "required",
+          residentKey: "preferred"
+        },
+        timeout: 120000
+      }
+    };
+
+    credential = await navigator.credentials.create(createOptions);
+
+    // Extract P-256 public key from credential
+    const pubKey = credential.response.getPublicKey();
+    const keyData = new Uint8Array(pubKey);
+    
+    // COSE key format: skip header, extract x (32 bytes) and y (32 bytes)
+    // For P-256 uncompressed: 0x04 || x(32) || y(32) — but COSE wraps differently
+    // The getPublicKey() returns SubjectPublicKeyInfo (SPKI) DER format
+    // For P-256: 26 byte header + 04 + x(32) + y(32)
+    const uncompressed = keyData.slice(-65); // last 65 bytes: 04 || x || y
+    if (uncompressed[0] !== 0x04) throw new Error("Unexpected key format");
+    
+    const x = uncompressed.slice(1, 33);
+    const y = uncompressed.slice(33, 65);
+    
+    pubKeyXY = {
+      x: '0x' + Array.from(x).map(b => b.toString(16).padStart(2, '0')).join(''),
+      y: '0x' + Array.from(y).map(b => b.toString(16).padStart(2, '0')).join('')
+    };
+
+    // Send public key to backend to register on-chain
+    const resp = await fetch(API + '/wallet/setup/register-passkey', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        token: setupToken,
+        wallet: walletAddress,
+        pubKeyX: pubKeyXY.x,
+        pubKeyY: pubKeyXY.y,
+        credentialId: btoa(String.fromCharCode(...new Uint8Array(credential.rawId)))
+      })
+    });
+
+    const data = await resp.json();
+    if (!resp.ok) throw new Error(data.error || 'Registration failed');
+
+    goStep(2);
+  } catch (e) {
+    showError(1, e.message || 'Passkey registration failed');
+    btn.disabled = false;
+    btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 11c0 3.517-1.009 6.799-2.753 9.571m-3.44-2.04l.054-.09A13.916 13.916 0 008 11a4 4 0 118 0c0 1.017-.07 2.019-.203 3m-2.118 6.844A21.88 21.88 0 0015.171 17m3.839 1.132c.645-2.266.99-4.659.99-7.132A8 8 0 008 4.07M3 15.364c.64-1.319 1-2.8 1-4.364 0-1.457.39-2.823 1.07-4"/></svg> Register Passkey';
+  }
+}
+
+async function saveLimits() {
+  const dailyLimit = parseInt(document.getElementById('dailyLimit').value) * 1e6; // USDC 6 decimals
+  const perTxLimit = parseInt(document.getElementById('perTxLimit').value) * 1e6;
+
+  if (dailyLimit <= 0 || perTxLimit <= 0) {
+    showError(2, 'Limits must be greater than 0');
+    return;
+  }
+  if (perTxLimit > dailyLimit) {
+    showError(2, 'Per-tx limit cannot exceed daily limit');
+    return;
+  }
+
+  try {
+    const resp = await fetch(API + '/wallet/setup/set-limits', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        token: setupToken,
+        wallet: walletAddress,
+        dailyLimit: dailyLimit.toString(),
+        perTxLimit: perTxLimit.toString()
+      })
+    });
+
+    const data = await resp.json();
+    if (!resp.ok) throw new Error(data.error || 'Failed to set limits');
+
+    goStep(3);
+  } catch (e) {
+    showError(2, e.message || 'Failed to save limits');
+  }
+}
+</script>
+</body>
+</html>

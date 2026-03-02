@@ -4,7 +4,7 @@
   "description": "Non-custodial smart wallets for AI agents",
   "type": "module",
   "scripts": {
-    "build": "tsc && cp -r base/abi dist/base/abi",
+    "build": "tsc && cp -r base/abi dist/base/abi && cp -r web dist/web",
     "start": "node dist/api/server.js",
     "test:contracts": "cd ../contracts/base && forge test -v"
   },

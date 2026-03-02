@@ -1,8 +1,16 @@
 import express from "express";
+import { readFileSync } from "fs";
+import { join, dirname } from "path";
+import { fileURLToPath } from "url";
+import crypto from "crypto";
 import { BaseWalletClient } from "../base/client.js";
 
+const __dirname = dirname(fileURLToPath(import.meta.url));
 const app = express();
 app.use(express.json());
+
+// Setup tokens: token → {walletAddress, agentAddress, createdAt}
+const setupTokens = new Map<string, { wallet: string; agent: string; createdAt: number }>();
 
 const PORT = parseInt(process.env.PORT || "3002");
 const BASE_RPC = process.env.BASE_RPC || "https://mainnet.base.org";
@@ -132,6 +140,112 @@ app.get("/stats", requireBase, async (_req, res) => {
   try {
     const total = await baseClient!.totalWallets();
     res.json({ totalWallets: total });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── Managed Wallet Creation ───
+app.post("/wallet/managed", requireBase, async (req, res) => {
+  const { agent } = req.body;
+  if (!agent) return res.status(400).json({ error: "agent address required" });
+
+  try {
+    const address = await baseClient!.createManagedWallet(agent);
+    await new Promise(r => setTimeout(r, 2000));
+    const info = await baseClient!.getWallet(address);
+
+    // Generate setup token
+    const token = crypto.randomBytes(32).toString("hex");
+    setupTokens.set(token, { wallet: address, agent, createdAt: Date.now() });
+
+    // Expire after 24h
+    setTimeout(() => setupTokens.delete(token), 86400000);
+
+    const setupUrl = `${req.protocol}://${req.get("host")}/setup?token=${token}&wallet=${address}`;
+
+    res.json({
+      wallet: info,
+      setupUrl,
+      setupToken: token,
+      message: "Send the setup URL to your human to register their passkey and set limits"
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── Unmanaged Wallet Creation ───
+app.post("/wallet/unmanaged", requireBase, async (req, res) => {
+  const { agent } = req.body;
+  if (!agent) return res.status(400).json({ error: "agent address required" });
+
+  try {
+    const address = await baseClient!.createUnmanagedWallet(agent);
+    await new Promise(r => setTimeout(r, 2000));
+    const info = await baseClient!.getWallet(address);
+    res.json({ wallet: info, message: "Unmanaged wallet — no limits, agent has full control" });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── Setup Page ───
+app.get("/setup", (_req, res) => {
+  try {
+    const html = readFileSync(join(__dirname, "../web/setup.html"), "utf-8");
+    res.type("html").send(html);
+  } catch {
+    res.status(404).send("Setup page not found");
+  }
+});
+
+// ─── Register Passkey (called from setup page) ───
+app.post("/wallet/setup/register-passkey", requireBase, async (req, res) => {
+  const { token, wallet: walletAddr, pubKeyX, pubKeyY, credentialId } = req.body;
+  if (!token || !walletAddr || !pubKeyX || !pubKeyY) {
+    return res.status(400).json({ error: "Missing required fields" });
+  }
+
+  const setup = setupTokens.get(token);
+  if (!setup || setup.wallet.toLowerCase() !== walletAddr.toLowerCase()) {
+    return res.status(403).json({ error: "Invalid or expired setup token" });
+  }
+
+  try {
+    const txHash = await baseClient!.registerPasskey(walletAddr, pubKeyX, pubKeyY);
+    res.json({ success: true, txHash, message: "Passkey registered on-chain" });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── Set Limits (called from setup page) ───
+app.post("/wallet/setup/set-limits", requireBase, async (req, res) => {
+  const { token, wallet: walletAddr, dailyLimit, perTxLimit } = req.body;
+  if (!token || !walletAddr) {
+    return res.status(400).json({ error: "Missing required fields" });
+  }
+
+  const setup = setupTokens.get(token);
+  if (!setup || setup.wallet.toLowerCase() !== walletAddr.toLowerCase()) {
+    return res.status(403).json({ error: "Invalid or expired setup token" });
+  }
+
+  try {
+    // Admin (factory deployer) is temp owner before passkey registration,
+    // so we can set policy via the admin key
+    const txHash = await baseClient!.setPolicy(
+      walletAddr,
+      process.env.ADMIN_PRIVATE_KEY || "",
+      BigInt(dailyLimit || 0),
+      BigInt(perTxLimit || 0)
+    );
+
+    // Clean up token after successful setup
+    setupTokens.delete(token);
+
+    res.json({ success: true, txHash, message: "Limits configured" });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }

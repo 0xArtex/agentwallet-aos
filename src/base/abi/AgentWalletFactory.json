@@ -55,6 +55,44 @@
   },
   {
     "type": "function",
+    "name": "createManagedWallet",
+    "inputs": [
+      {
+        "name": "agent_",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "wallet",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "createUnmanagedWallet",
+    "inputs": [
+      {
+        "name": "agent_",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "wallet",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
     "name": "createWallet",
     "inputs": [
       {
