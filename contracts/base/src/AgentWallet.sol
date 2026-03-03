@@ -6,42 +6,65 @@ import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import {PasskeyVerifier} from "./PasskeyVerifier.sol";
 
+interface AggregatorV3Interface {
+    function latestRoundData() external view returns (
+        uint80 roundId,
+        int256 answer,
+        uint256 startedAt,
+        uint256 updatedAt,
+        uint80 answeredInRound
+    );
+    function decimals() external view returns (uint8);
+}
+
 /**
  * @title AgentWallet
  * @notice Non-custodial smart wallet for AI agents.
  *
- * Two owner modes:
- * 1. Passkey (managed) — human controls via FaceID/YubiKey/Ledger, P-256 on-chain verification
- * 2. EOA (self-custody) — human controls via Ethereum wallet (legacy mode)
+ * Limit tracking:
+ * - Native ETH: converted to USD via Chainlink oracle, tracked against USD daily/per-tx limits
+ * - USDC: tracked directly against USD limits (1:1)
+ * - ETH + USDC share the SAME aggregated USD daily limit
+ * - Other ERC-20s: unlimited by default, owner can set per-token limits
  *
- * Agent operates within hard limits. All txs execute instantly or revert.
- * No approval queues. Passkey signatures verified on-chain via RIP-7212.
+ * Two owner modes:
+ * 1. Passkey (managed) — human controls via FaceID/YubiKey/Ledger
+ * 2. EOA (self-custody) — human controls via Ethereum wallet
  */
 contract AgentWallet is IAgentWallet, ReentrancyGuard {
 
-    uint256 private constant DEFAULT_DAILY_LIMIT = 50e6;
-    uint256 private constant DEFAULT_PER_TX_LIMIT = 25e6;
+    uint256 private constant DEFAULT_DAILY_LIMIT = 50e6;   // $50 USD (6 decimals)
+    uint256 private constant DEFAULT_PER_TX_LIMIT = 25e6;  // $25 USD (6 decimals)
     uint256 private constant DAY = 86400;
+    uint256 private constant ORACLE_STALENESS = 3600;      // 1 hour max staleness
 
     // ─── State ───
-    address public override owner;        // EOA owner (address(0) if passkey mode)
+    address public override owner;
     address public override agentKey;
 
     // Passkey owner (P-256 public key)
     bytes32 public passkeyX;
     bytes32 public passkeyY;
     bool public isPasskeyOwner;
-
-    // Nonce for passkey replay protection
     uint256 public passkeyNonce;
 
     Policy private _policy;
     bool public initialized;
 
+    // USD daily tracking (ETH + USDC aggregated)
     uint256 private _dayStart;
-    uint256 private _spentToday;
+    uint256 private _spentTodayUSD;  // USD with 6 decimals
+
+    // Per-token daily tracking
+    mapping(address => TokenLimit) public tokenLimits;
+    mapping(address => uint256) private _tokenDayStart;
+    mapping(address => uint256) private _tokenSpentToday;
 
     mapping(address => bool) public blacklisted;
+
+    // Oracle + USDC addresses (set during init)
+    address public ethUsdOracle;
+    address public usdcAddress;
 
     // ─── Modifiers ───
     modifier onlyOwner() {
@@ -61,9 +84,6 @@ contract AgentWallet is IAgentWallet, ReentrancyGuard {
 
     // ─── Initialization ───
 
-    /**
-     * @notice Initialize with EOA owner (legacy mode).
-     */
     function initialize(address _owner, address _agent) external {
         require(!initialized, "AW: already initialized");
         require(_owner != address(0), "AW: zero owner");
@@ -82,14 +102,8 @@ contract AgentWallet is IAgentWallet, ReentrancyGuard {
         _dayStart = block.timestamp;
     }
 
-    /**
-     * @notice Initialize with passkey owner (managed mode).
-     * @dev Called when human registers their passkey via the setup page.
-     */
     function initializeWithPasskey(
-        bytes32 _passkeyX,
-        bytes32 _passkeyY,
-        address _agent
+        bytes32 _passkeyX, bytes32 _passkeyY, address _agent
     ) external {
         require(!initialized, "AW: already initialized");
         require(_passkeyX != bytes32(0) && _passkeyY != bytes32(0), "AW: zero passkey");
@@ -100,7 +114,7 @@ contract AgentWallet is IAgentWallet, ReentrancyGuard {
         passkeyY = _passkeyY;
         agentKey = _agent;
         isPasskeyOwner = true;
-        owner = address(0); // no EOA owner
+        owner = address(0);
 
         _policy = Policy({
             dailyLimit: DEFAULT_DAILY_LIMIT,
@@ -111,13 +125,18 @@ contract AgentWallet is IAgentWallet, ReentrancyGuard {
     }
 
     /**
-     * @notice Register passkey after wallet creation (for setup-link flow).
-     * @dev Only callable once, only if passkey not yet set, by the factory/admin.
+     * @notice Set oracle + USDC addresses. Only callable once by owner/admin.
+     * @dev Must be called after initialize. Separated to keep initialize() simple.
      */
-    function registerPasskey(
-        bytes32 _passkeyX,
-        bytes32 _passkeyY
-    ) external {
+    function setOracle(address _ethUsdOracle, address _usdcAddress) external {
+        require(initialized, "AW: not initialized");
+        require(ethUsdOracle == address(0), "AW: oracle already set");
+        require(msg.sender == owner || owner == address(0), "AW: unauthorized");
+        ethUsdOracle = _ethUsdOracle;
+        usdcAddress = _usdcAddress;
+    }
+
+    function registerPasskey(bytes32 _passkeyX, bytes32 _passkeyY) external {
         require(initialized, "AW: not initialized");
         require(!isPasskeyOwner, "AW: passkey already set");
         require(owner == msg.sender || owner == address(0), "AW: unauthorized");
@@ -126,29 +145,17 @@ contract AgentWallet is IAgentWallet, ReentrancyGuard {
         passkeyX = _passkeyX;
         passkeyY = _passkeyY;
         isPasskeyOwner = true;
-        owner = address(0); // transfer ownership to passkey
+        owner = address(0);
 
         emit PasskeyRegistered(_passkeyX, _passkeyY);
     }
 
     // ─── Passkey-Authenticated Owner Actions ───
 
-    /**
-     * @notice Update policy via passkey signature.
-     * @param dailyLimit New daily limit (0 = keep current)
-     * @param perTxLimit New per-tx limit (0 = keep current)
-     * @param authenticatorData WebAuthn authenticator data
-     * @param clientDataJSON WebAuthn client data JSON (contains challenge)
-     * @param r Signature r
-     * @param s Signature s
-     */
     function setPolicyWithPasskey(
-        uint256 dailyLimit,
-        uint256 perTxLimit,
-        bytes calldata authenticatorData,
-        string calldata clientDataJSON,
-        bytes32 r,
-        bytes32 s
+        uint256 dailyLimit, uint256 perTxLimit,
+        bytes calldata authenticatorData, string calldata clientDataJSON,
+        bytes32 r, bytes32 s
     ) external {
         _verifyPasskey(authenticatorData, clientDataJSON, r, s);
         if (dailyLimit > 0) _policy.dailyLimit = dailyLimit;
@@ -156,11 +163,27 @@ contract AgentWallet is IAgentWallet, ReentrancyGuard {
         emit PolicyUpdated(_policy.dailyLimit, _policy.perTxLimit);
     }
 
+    function setTokenLimitWithPasskey(
+        address token, uint256 dailyLimit, uint256 perTxLimit,
+        bytes calldata authenticatorData, string calldata clientDataJSON,
+        bytes32 r, bytes32 s
+    ) external {
+        _verifyPasskey(authenticatorData, clientDataJSON, r, s);
+        _setTokenLimit(token, dailyLimit, perTxLimit);
+    }
+
+    function removeTokenLimitWithPasskey(
+        address token,
+        bytes calldata authenticatorData, string calldata clientDataJSON,
+        bytes32 r, bytes32 s
+    ) external {
+        _verifyPasskey(authenticatorData, clientDataJSON, r, s);
+        _removeTokenLimit(token);
+    }
+
     function pauseWithPasskey(
-        bytes calldata authenticatorData,
-        string calldata clientDataJSON,
-        bytes32 r,
-        bytes32 s
+        bytes calldata authenticatorData, string calldata clientDataJSON,
+        bytes32 r, bytes32 s
     ) external {
         _verifyPasskey(authenticatorData, clientDataJSON, r, s);
         _policy.paused = true;
@@ -168,10 +191,8 @@ contract AgentWallet is IAgentWallet, ReentrancyGuard {
     }
 
     function unpauseWithPasskey(
-        bytes calldata authenticatorData,
-        string calldata clientDataJSON,
-        bytes32 r,
-        bytes32 s
+        bytes calldata authenticatorData, string calldata clientDataJSON,
+        bytes32 r, bytes32 s
     ) external {
         _verifyPasskey(authenticatorData, clientDataJSON, r, s);
         _policy.paused = false;
@@ -179,12 +200,9 @@ contract AgentWallet is IAgentWallet, ReentrancyGuard {
     }
 
     function setBlacklistWithPasskey(
-        address addr,
-        bool blocked,
-        bytes calldata authenticatorData,
-        string calldata clientDataJSON,
-        bytes32 r,
-        bytes32 s
+        address addr, bool blocked,
+        bytes calldata authenticatorData, string calldata clientDataJSON,
+        bytes32 r, bytes32 s
     ) external {
         _verifyPasskey(authenticatorData, clientDataJSON, r, s);
         blacklisted[addr] = blocked;
@@ -193,10 +211,8 @@ contract AgentWallet is IAgentWallet, ReentrancyGuard {
 
     function setAgentKeyWithPasskey(
         address newAgent,
-        bytes calldata authenticatorData,
-        string calldata clientDataJSON,
-        bytes32 r,
-        bytes32 s
+        bytes calldata authenticatorData, string calldata clientDataJSON,
+        bytes32 r, bytes32 s
     ) external {
         _verifyPasskey(authenticatorData, clientDataJSON, r, s);
         require(newAgent != address(0), "AW: zero agent");
@@ -205,13 +221,9 @@ contract AgentWallet is IAgentWallet, ReentrancyGuard {
     }
 
     function emergencyWithdrawWithPasskey(
-        address token,
-        uint256 amount,
-        address recipient,
-        bytes calldata authenticatorData,
-        string calldata clientDataJSON,
-        bytes32 r,
-        bytes32 s
+        address token, uint256 amount, address recipient,
+        bytes calldata authenticatorData, string calldata clientDataJSON,
+        bytes32 r, bytes32 s
     ) external nonReentrant {
         _verifyPasskey(authenticatorData, clientDataJSON, r, s);
         require(recipient != address(0), "AW: zero recipient");
@@ -223,12 +235,20 @@ contract AgentWallet is IAgentWallet, ReentrancyGuard {
         }
     }
 
-    // ─── EOA Owner Actions (legacy mode) ───
+    // ─── EOA Owner Actions ───
 
     function setPolicy(uint256 dailyLimit, uint256 perTxLimit) external onlyOwner {
         if (dailyLimit > 0) _policy.dailyLimit = dailyLimit;
         if (perTxLimit > 0) _policy.perTxLimit = perTxLimit;
         emit PolicyUpdated(_policy.dailyLimit, _policy.perTxLimit);
+    }
+
+    function setTokenLimit(address token, uint256 dailyLimit, uint256 perTxLimit) external onlyOwner {
+        _setTokenLimit(token, dailyLimit, perTxLimit);
+    }
+
+    function removeTokenLimit(address token) external onlyOwner {
+        _removeTokenLimit(token);
     }
 
     function setAgentKey(address newAgent) external onlyOwner {
@@ -275,34 +295,47 @@ contract AgentWallet is IAgentWallet, ReentrancyGuard {
 
     // ─── Agent Functions ───
 
+    /**
+     * @notice Execute a native ETH transfer or arbitrary call.
+     * @dev ETH value is converted to USD via Chainlink and tracked against USD limits.
+     *      If no oracle is set, `value` is tracked raw (legacy behavior).
+     */
     function execute(
         address to,
-        uint256 amount,
+        uint256 value,
         bytes calldata data
     ) external onlyAgent whenNotPaused nonReentrant {
         require(to != address(0), "AW: zero address");
         require(!blacklisted[to], "AW: blacklisted");
-        require(amount <= _policy.perTxLimit, "AW: exceeds per-tx limit");
 
-        if (block.timestamp >= _dayStart + DAY) {
-            _dayStart = block.timestamp;
-            _spentToday = 0;
+        // Convert ETH to USD if oracle is set, otherwise raw value
+        uint256 usdAmount;
+        if (value > 0 && ethUsdOracle != address(0)) {
+            usdAmount = _ethToUsd(value);
+        } else {
+            usdAmount = value;
         }
 
-        require(_spentToday + amount <= _policy.dailyLimit, "AW: exceeds daily limit");
-        _spentToday += amount;
+        // Check USD limits (shared between ETH + USDC)
+        require(usdAmount <= _policy.perTxLimit, "AW: exceeds per-tx limit");
+        _trackUsdSpend(usdAmount);
 
         if (data.length == 0) {
-            (bool ok, ) = to.call{value: amount}("");
+            (bool ok, ) = to.call{value: value}("");
             require(ok, "AW: transfer failed");
         } else {
-            (bool ok, ) = to.call{value: amount}(data);
+            (bool ok, ) = to.call{value: value}(data);
             require(ok, "AW: call failed");
         }
 
-        emit TransactionExecuted(to, amount, block.timestamp);
+        emit TransactionExecuted(to, value, block.timestamp);
     }
 
+    /**
+     * @notice Execute an ERC-20 transfer.
+     * @dev USDC transfers are tracked against the shared USD daily limit.
+     *      Other tokens: checked against per-token limits if set, otherwise unlimited.
+     */
     function executeERC20(
         address token,
         address to,
@@ -310,15 +343,20 @@ contract AgentWallet is IAgentWallet, ReentrancyGuard {
     ) external onlyAgent whenNotPaused nonReentrant {
         require(to != address(0), "AW: zero address");
         require(!blacklisted[to], "AW: blacklisted");
-        require(amount <= _policy.perTxLimit, "AW: exceeds per-tx limit");
 
-        if (block.timestamp >= _dayStart + DAY) {
-            _dayStart = block.timestamp;
-            _spentToday = 0;
+        if (token == usdcAddress && usdcAddress != address(0)) {
+            // USDC → tracked against shared USD limits (1:1)
+            require(amount <= _policy.perTxLimit, "AW: exceeds per-tx limit");
+            _trackUsdSpend(amount);
+        } else {
+            // Other ERC-20: check per-token limits if they exist
+            TokenLimit storage tl = tokenLimits[token];
+            if (tl.active) {
+                require(amount <= tl.perTxLimit, "AW: exceeds token per-tx limit");
+                _trackTokenSpend(token, amount);
+            }
+            // If no limit set → unlimited, no tracking
         }
-
-        require(_spentToday + amount <= _policy.dailyLimit, "AW: exceeds daily limit");
-        _spentToday += amount;
 
         require(IERC20(token).transfer(to, amount), "AW: transfer failed");
         emit TransactionExecuted(to, amount, block.timestamp);
@@ -332,35 +370,109 @@ contract AgentWallet is IAgentWallet, ReentrancyGuard {
 
     function getSpentToday() external view override returns (uint256) {
         if (block.timestamp >= _dayStart + DAY) return 0;
-        return _spentToday;
+        return _spentTodayUSD;
     }
 
     function getRemainingDaily() external view override returns (uint256) {
-        uint256 spent = block.timestamp >= _dayStart + DAY ? 0 : _spentToday;
+        uint256 spent = block.timestamp >= _dayStart + DAY ? 0 : _spentTodayUSD;
         if (spent >= _policy.dailyLimit) return 0;
         return _policy.dailyLimit - spent;
+    }
+
+    function getTokenLimit(address token) external view returns (TokenLimit memory) {
+        return tokenLimits[token];
+    }
+
+    function getTokenSpentToday(address token) external view returns (uint256) {
+        if (block.timestamp >= _tokenDayStart[token] + DAY) return 0;
+        return _tokenSpentToday[token];
     }
 
     function getPasskey() external view returns (bytes32 x, bytes32 y) {
         return (passkeyX, passkeyY);
     }
 
+    /**
+     * @notice Get current ETH price in USD (6 decimals). Returns 0 if no oracle.
+     */
+    function getEthPrice() external view returns (uint256) {
+        if (ethUsdOracle == address(0)) return 0;
+        return _getEthPriceUsd();
+    }
+
     // ─── Internal ───
+
+    function _ethToUsd(uint256 weiAmount) internal view returns (uint256) {
+        uint256 ethPriceUsd = _getEthPriceUsd(); // USD with 6 decimals per 1 ETH
+        // weiAmount is in wei (18 decimals), ethPriceUsd is USD*1e6 per 1e18 wei
+        return (weiAmount * ethPriceUsd) / 1e18;
+    }
+
+    function _getEthPriceUsd() internal view returns (uint256) {
+        AggregatorV3Interface oracle = AggregatorV3Interface(ethUsdOracle);
+        (, int256 answer,, uint256 updatedAt,) = oracle.latestRoundData();
+        require(answer > 0, "AW: invalid oracle price");
+        require(block.timestamp - updatedAt <= ORACLE_STALENESS, "AW: stale oracle");
+
+        uint8 oracleDecimals = oracle.decimals();
+        // Normalize to 6 decimals (our USD denomination)
+        if (oracleDecimals > 6) {
+            return uint256(answer) / (10 ** (oracleDecimals - 6));
+        } else {
+            return uint256(answer) * (10 ** (6 - oracleDecimals));
+        }
+    }
+
+    function _trackUsdSpend(uint256 usdAmount) internal {
+        if (block.timestamp >= _dayStart + DAY) {
+            _dayStart = block.timestamp;
+            _spentTodayUSD = 0;
+        }
+        require(_spentTodayUSD + usdAmount <= _policy.dailyLimit, "AW: exceeds daily limit");
+        _spentTodayUSD += usdAmount;
+    }
+
+    function _trackTokenSpend(address token, uint256 amount) internal {
+        if (block.timestamp >= _tokenDayStart[token] + DAY) {
+            _tokenDayStart[token] = block.timestamp;
+            _tokenSpentToday[token] = 0;
+        }
+        require(
+            _tokenSpentToday[token] + amount <= tokenLimits[token].dailyLimit,
+            "AW: exceeds token daily limit"
+        );
+        _tokenSpentToday[token] += amount;
+    }
+
+    function _setTokenLimit(address token, uint256 dailyLimit, uint256 perTxLimit) internal {
+        require(token != address(0), "AW: zero token");
+        require(dailyLimit > 0 && perTxLimit > 0, "AW: zero limit");
+        tokenLimits[token] = TokenLimit({
+            dailyLimit: dailyLimit,
+            perTxLimit: perTxLimit,
+            active: true
+        });
+        emit TokenLimitSet(token, dailyLimit, perTxLimit);
+    }
+
+    function _removeTokenLimit(address token) internal {
+        require(token != address(0), "AW: zero token");
+        delete tokenLimits[token];
+        delete _tokenDayStart[token];
+        delete _tokenSpentToday[token];
+        emit TokenLimitRemoved(token);
+    }
 
     function _verifyPasskey(
         bytes calldata authenticatorData,
         string calldata clientDataJSON,
-        bytes32 r,
-        bytes32 s
+        bytes32 r, bytes32 s
     ) internal {
         require(isPasskeyOwner, "AW: not passkey mode");
         require(
             PasskeyVerifier.verifyWebAuthn(
-                authenticatorData,
-                clientDataJSON,
-                r, s,
-                passkeyX,
-                passkeyY
+                authenticatorData, clientDataJSON,
+                r, s, passkeyX, passkeyY
             ),
             "AW: invalid passkey signature"
         );
