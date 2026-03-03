@@ -29,6 +29,24 @@ function print(obj: any) {
 
 // ─── Commands ───
 
+async function keygen() {
+  const { ethers } = await import("ethers");
+  const wallet = ethers.Wallet.createRandom();
+
+  console.log("");
+  console.log("  New agent keypair generated:");
+  console.log("");
+  console.log("  Address:     " + wallet.address);
+  console.log("  Private key: " + wallet.privateKey);
+  console.log("");
+  console.log("  Save the private key securely. You'll need it to sign transactions.");
+  console.log("  Use the address with 'agentwallet create --agent " + wallet.address + "'");
+
+  console.log("");
+  console.log("---");
+  print({ address: wallet.address, privateKey: wallet.privateKey });
+}
+
 async function create() {
   const mode = hasFlag("unmanaged") ? "unmanaged" : "managed";
   const agent = flag("agent");
@@ -208,6 +226,7 @@ function help() {
   agentwallet — Non-custodial smart wallets for AI agents
 
   Commands:
+    keygen              Generate a new agent keypair
     create              Create a new wallet
     status <addr>       Check wallet status and limits
     request-increase    Request limit increase (returns link for human)
@@ -239,6 +258,7 @@ function help() {
 async function main() {
   try {
     switch (cmd) {
+      case "keygen": await keygen(); break;
       case "create": await create(); break;
       case "status": await walletStatus(); break;
       case "request-increase": await requestIncrease(); break;
