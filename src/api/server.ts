@@ -33,11 +33,13 @@ const PORT = parseInt(process.env.PORT || "3002");
 const BASE_RPC = process.env.BASE_RPC || "https://mainnet.base.org";
 const ADMIN_KEY = process.env.ADMIN_PRIVATE_KEY || "";
 const FACTORY_ADDRESS = process.env.FACTORY_ADDRESS || "";
+const ETH_USD_ORACLE = process.env.ETH_USD_ORACLE || "";
+const USDC_ADDRESS = process.env.USDC_ADDRESS || "";
 
 let baseClient: BaseWalletClient | null = null;
 
 if (ADMIN_KEY && FACTORY_ADDRESS) {
-  baseClient = new BaseWalletClient(BASE_RPC, ADMIN_KEY, FACTORY_ADDRESS);
+  baseClient = new BaseWalletClient(BASE_RPC, ADMIN_KEY, FACTORY_ADDRESS, ETH_USD_ORACLE, USDC_ADDRESS);
   console.log("Base wallet client initialized");
 } else {
   console.warn("Missing ADMIN_PRIVATE_KEY or FACTORY_ADDRESS — Base disabled");

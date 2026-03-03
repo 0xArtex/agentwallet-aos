@@ -26,23 +26,31 @@ export class BaseWalletClient {
   private provider: JsonRpcProvider;
   public adminWallet: Wallet;
   private factory: Contract;
+  private ethUsdOracle: string;
+  private usdcAddress: string;
 
-  constructor(rpcUrl: string, adminPrivateKey: string, factoryAddress: string) {
+  constructor(rpcUrl: string, adminPrivateKey: string, factoryAddress: string, ethUsdOracle?: string, usdcAddress?: string) {
     this.provider = new JsonRpcProvider(rpcUrl);
     this.adminWallet = new Wallet(adminPrivateKey, this.provider);
     this.factory = new Contract(factoryAddress, FACTORY_ABI, this.adminWallet);
+    this.ethUsdOracle = ethUsdOracle || "";
+    this.usdcAddress = usdcAddress || "";
   }
 
   async createManagedWallet(agentAddress: string): Promise<string> {
     const tx = await this.factory.createManagedWallet(agentAddress);
     const receipt = await tx.wait();
-    return this.extractWalletAddress(receipt) || agentAddress;
+    const addr = this.extractWalletAddress(receipt) || agentAddress;
+    await this.configureOracle(addr);
+    return addr;
   }
 
   async createUnmanagedWallet(agentAddress: string): Promise<string> {
     const tx = await this.factory.createUnmanagedWallet(agentAddress);
     const receipt = await tx.wait();
-    return this.extractWalletAddress(receipt) || agentAddress;
+    const addr = this.extractWalletAddress(receipt) || agentAddress;
+    await this.configureOracle(addr);
+    return addr;
   }
 
   async registerPasskey(walletAddress: string, pubKeyX: string, pubKeyY: string): Promise<string> {
@@ -72,13 +80,16 @@ export class BaseWalletClient {
       } catch { return false; }
     });
 
+    let walletAddr: string;
     if (event) {
       const parsed = this.factory.interface.parseLog({ topics: event.topics as string[], data: event.data });
-      return parsed!.args.wallet;
+      walletAddr = parsed!.args.wallet;
+    } else {
+      const index = await this.factory.walletCount(ownerAddress);
+      walletAddr = await (this.factory as any).getAddress(ownerAddress, agentAddress, index - 1n);
     }
-
-    const index = await this.factory.walletCount(ownerAddress);
-    return (this.factory as any).getAddress(ownerAddress, agentAddress, index - 1n);
+    await this.configureOracle(walletAddr);
+    return walletAddr;
   }
 
   async predictAddress(ownerAddress: string, agentAddress: string): Promise<string> {
@@ -138,6 +149,38 @@ export class BaseWalletClient {
   async isBlacklisted(walletAddress: string, addr: string): Promise<boolean> {
     const wallet = new Contract(walletAddress, WALLET_ABI, this.provider);
     return wallet.blacklisted(addr);
+  }
+
+  private async configureOracle(walletAddress: string): Promise<void> {
+    if (!this.ethUsdOracle || !this.usdcAddress) return;
+    try {
+      const wallet = new Contract(walletAddress, WALLET_ABI, this.adminWallet);
+      const tx = await wallet.setOracle(this.ethUsdOracle, this.usdcAddress);
+      await tx.wait();
+    } catch (e: any) {
+      // Oracle may already be set — ignore
+      if (!e.message?.includes("oracle already set")) throw e;
+    }
+  }
+
+  async setTokenLimit(walletAddress: string, ownerKey: string, token: string, dailyLimit: bigint, perTxLimit: bigint): Promise<string> {
+    const ownerWallet = new Wallet(ownerKey, this.provider);
+    const wallet = new Contract(walletAddress, WALLET_ABI, ownerWallet);
+    const tx = await wallet.setTokenLimit(token, dailyLimit, perTxLimit);
+    return (await tx.wait()).hash;
+  }
+
+  async removeTokenLimit(walletAddress: string, ownerKey: string, token: string): Promise<string> {
+    const ownerWallet = new Wallet(ownerKey, this.provider);
+    const wallet = new Contract(walletAddress, WALLET_ABI, ownerWallet);
+    const tx = await wallet.removeTokenLimit(token);
+    return (await tx.wait()).hash;
+  }
+
+  async getTokenLimit(walletAddress: string, token: string): Promise<{ dailyLimit: string; perTxLimit: string; active: boolean }> {
+    const wallet = new Contract(walletAddress, WALLET_ABI, this.provider);
+    const tl = await wallet.getTokenLimit(token);
+    return { dailyLimit: tl.dailyLimit.toString(), perTxLimit: tl.perTxLimit.toString(), active: tl.active };
   }
 
   async topUpGas(walletAddress: string): Promise<string> {
