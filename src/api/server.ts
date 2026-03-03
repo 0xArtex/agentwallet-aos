@@ -167,6 +167,24 @@ app.get("/stats", requireBase, async (_req, res) => {
 
 // (managed/unmanaged routes merged into POST /wallet above)
 
+app.get("/test", (_req, res) => {
+  try {
+    const html = readFileSync(join(__dirname, "../web/test.html"), "utf-8");
+    res.type("html").set("Cache-Control", "no-store").send(html);
+  } catch {
+    res.status(404).send("Test page not found");
+  }
+});
+
+app.get("/s2", (_req, res) => {
+  try {
+    const html = readFileSync(join(__dirname, "../web/setup.html"), "utf-8");
+    res.type("html").set("Cache-Control", "no-store").send(html);
+  } catch {
+    res.status(404).send("Setup page not found");
+  }
+});
+
 // ─── Setup Page ───
 app.get("/setup", (_req, res) => {
   try {
@@ -178,7 +196,7 @@ app.get("/setup", (_req, res) => {
 });
 
 // ─── Register Passkey (called from setup page) ───
-app.post("/wallet/setup/register-passkey", requireBase, async (req, res) => {
+app.post("/setup/register-passkey", requireBase, async (req, res) => {
   const { token, wallet: walletAddr, pubKeyX, pubKeyY, credentialId } = req.body;
   if (!token || !walletAddr || !pubKeyX || !pubKeyY) {
     return res.status(400).json({ error: "Missing required fields" });
@@ -191,6 +209,7 @@ app.post("/wallet/setup/register-passkey", requireBase, async (req, res) => {
 
   try {
     const txHash = await baseClient!.registerPasskey(walletAddr, pubKeyX, pubKeyY);
+    setupTokens.delete(token);
     res.json({ success: true, txHash, message: "Passkey registered on-chain" });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
@@ -198,7 +217,7 @@ app.post("/wallet/setup/register-passkey", requireBase, async (req, res) => {
 });
 
 // ─── Set Limits (called from setup page) ───
-app.post("/wallet/setup/set-limits", requireBase, async (req, res) => {
+app.post("/setup/set-limits", requireBase, async (req, res) => {
   const { token, wallet: walletAddr, dailyLimit, perTxLimit } = req.body;
   if (!token || !walletAddr) {
     return res.status(400).json({ error: "Missing required fields" });
@@ -218,9 +237,6 @@ app.post("/wallet/setup/set-limits", requireBase, async (req, res) => {
       BigInt(dailyLimit || 0),
       BigInt(perTxLimit || 0)
     );
-
-    // Clean up token after successful setup
-    setupTokens.delete(token);
 
     res.json({ success: true, txHash, message: "Limits configured" });
   } catch (err: any) {

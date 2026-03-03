@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Test</title></head>
+<body style="background:#000;color:#fff;font-family:sans-serif;padding:20px">
+<h2>WebAuthn Test</h2>
+<pre id="log" style="white-space:pre-wrap;font-size:13px">Ready. Tap the button.</pre>
+<br>
+<button id="btn" style="padding:16px 32px;font-size:18px" onclick="doTest()">Test Passkey</button>
+<script>
+var log = document.getElementById('log');
+function addLog(msg) { log.textContent += '\n' + msg; }
+
+function doTest() {
+  addLog('Starting...');
+  addLog('PublicKeyCredential: ' + (typeof PublicKeyCredential));
+  addLog('hostname: ' + window.location.hostname);
+  addLog('protocol: ' + window.location.protocol);
+  
+  var challenge = new Uint8Array(32);
+  window.crypto.getRandomValues(challenge);
+  
+  var userId = new Uint8Array(16);
+  window.crypto.getRandomValues(userId);
+  
+  addLog('challenge and userId created');
+  
+  var options = {
+    publicKey: {
+      challenge: challenge,
+      rp: { name: "Test" },
+      user: {
+        id: userId,
+        name: "test",
+        displayName: "Test"
+      },
+      pubKeyCredParams: [
+        { type: "public-key", alg: -7 }
+      ]
+    }
+  };
+  
+  addLog('options built, calling create()...');
+  
+  navigator.credentials.create(options).then(function(cred) {
+    addLog('SUCCESS! Got credential');
+    addLog('id: ' + cred.id);
+    addLog('type: ' + cred.type);
+  }).catch(function(err) {
+    addLog('FAILED: ' + err.name + ': ' + err.message);
+  });
+}
+</script>
+</body>
+</html>
