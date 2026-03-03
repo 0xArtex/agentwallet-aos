@@ -1,0 +1,10 @@
+{
+  "name": "agentwallet",
+  "version": "0.1.0",
+  "description": "Non-custodial smart wallets for AI agents",
+  "type": "module",
+  "bin": { "agentwallet": "./dist/index.js" },
+  "scripts": { "build": "tsc", "dev": "tsx src/index.ts" },
+  "dependencies": { "ethers": "^6.16.0" },
+  "devDependencies": { "typescript": "^5.4.0", "tsx": "^4.7.0", "@types/node": "^22.0.0" }
+}
