@@ -157,6 +157,78 @@ async function walletStatus() {
   print(w);
 }
 
+async function send() {
+  const wallet = flag("wallet");
+  const to = flag("to");
+  const amount = flag("amount");
+  const key = flag("key") || process.env.AGENTWALLET_KEY;
+  const token = flag("token"); // ERC20 address, omit for ETH
+
+  if (!wallet || !to || !amount || !key) {
+    console.error(`
+  agentwallet send --wallet <WALLET> --to <RECIPIENT> --amount <AMOUNT> --key <PRIVATE_KEY>
+
+  Send funds from your wallet. Amount is in the token's native units (USDC = dollars).
+
+  --wallet   Your smart wallet address (required)
+  --to       Recipient address (required)
+  --amount   Amount to send in USDC/ETH (required)
+  --key      Your agent private key (required, or set AGENTWALLET_KEY env var)
+  --token    ERC20 token address (omit for native ETH)
+
+  Examples:
+    agentwallet send --wallet 0xWallet --to 0xRecipient --amount 10 --key 0xPrivKey
+    AGENTWALLET_KEY=0xPrivKey agentwallet send --wallet 0xW --to 0xR --amount 5
+`);
+    process.exit(1);
+  }
+
+  const { ethers } = await import("ethers");
+  const { readFileSync } = await import("fs");
+  const { join, dirname } = await import("path");
+  const { fileURLToPath } = await import("url");
+
+  // Use public RPC — agent doesn't need our backend for transactions
+  const RPC = process.env.AGENTWALLET_RPC || "https://base-sepolia-rpc.publicnode.com";
+  const provider = new ethers.JsonRpcProvider(RPC);
+  const signer = new ethers.Wallet(key, provider);
+
+  // Minimal ABI for execute and executeERC20
+  const WALLET_ABI = [
+    "function execute(address to, uint256 value, bytes calldata data) external",
+    "function executeERC20(address token, address to, uint256 amount) external"
+  ];
+
+  const contract = new ethers.Contract(wallet, WALLET_ABI, signer);
+
+  if (token) {
+    // ERC20 transfer — assume 6 decimals (USDC)
+    const decimals = 6;
+    const raw = BigInt(Math.round(parseFloat(amount) * 10 ** decimals));
+    console.log(`Sending ${amount} tokens to ${to}...`);
+    const tx = await contract.executeERC20(token, to, raw);
+    const receipt = await tx.wait();
+    console.log("");
+    console.log("  Sent!");
+    console.log("  Tx: " + receipt.hash);
+    console.log("");
+    console.log("---");
+    print({ tx: receipt.hash, to, amount, token });
+  } else {
+    // Native ETH transfer
+    const raw = ethers.parseEther(amount);
+    console.log(`Sending ${amount} ETH to ${to}...`);
+    const tx = await contract.execute(to, raw, "0x");
+    const receipt = await tx.wait();
+    console.log("");
+    console.log("  Sent!");
+    console.log("  Tx: " + receipt.hash);
+    console.log("");
+    console.log("---");
+    print({ tx: receipt.hash, to, amount });
+  }
+}
+
 async function requestIncrease() {
   const addr = flag("wallet") || args[1];
   const daily = flag("daily");
@@ -236,6 +308,7 @@ function help() {
     keygen              Generate a new agent keypair
     create              Create a new wallet
     status <addr>       Check wallet status and limits
+    send                Send ETH or tokens from your wallet
     request-increase    Request limit increase (returns link for human)
     pause               Request wallet pause (returns link for human)
     stats               Network stats
@@ -270,6 +343,7 @@ async function main() {
       case "keygen": await keygen(); break;
       case "create": await create(); break;
       case "status": await walletStatus(); break;
+      case "send": await send(); break;
       case "request-increase": await requestIncrease(); break;
       case "pause": await walletPause(); break;
       case "stats": await stats(); break;
