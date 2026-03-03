@@ -49,61 +49,68 @@ async function keygen() {
 
 async function create() {
   const mode = hasFlag("unmanaged") ? "unmanaged" : "managed";
-  const agent = flag("agent");
+  let agent = flag("agent");
 
+  // Auto-generate agent keypair if not provided
+  let privateKey: string | null = null;
   if (!agent) {
-    console.error(`
-  agentwallet create --agent <ADDRESS> [--unmanaged]
-
-  Create a new smart wallet for an AI agent.
-
-  --agent      Agent's Ethereum address (required)
-  --unmanaged  Skip human owner setup (agent has full control)
-
-  Examples:
-    agentwallet create --agent 0x1234...abcd
-    agentwallet create --agent 0x1234...abcd --unmanaged
-`);
-    process.exit(1);
+    const { ethers } = await import("ethers");
+    const kp = ethers.Wallet.createRandom();
+    agent = kp.address;
+    privateKey = kp.privateKey;
   }
 
-  console.log(`Creating ${mode} wallet for agent ${agent}...`);
+  console.log(`Creating ${mode} wallet...`);
   const data = await api("POST", "/wallet", { agent, mode });
 
   console.log("");
   console.log("  Wallet created!");
   console.log("");
-  console.log("  Address:  " + data.wallet.address);
-  console.log("  Agent:    " + data.wallet.agent);
+  console.log("  ┌─ Wallet (fund this address) ────────────┐");
+  console.log("  │  " + data.wallet.address);
+  console.log("  └─────────────────────────────────────────┘");
+  console.log("");
+  if (privateKey) {
+    console.log("  Agent key (save this — you sign transactions with it):");
+    console.log("    Address:     " + agent);
+    console.log("    Private key: " + privateKey);
+    console.log("");
+  } else {
+    console.log("  Agent key:  " + agent);
+    console.log("");
+  }
   console.log("  Chain:    Base (Sepolia testnet)");
-  console.log("  Mode:     " + mode);
   console.log("  Daily:    " + parseInt(data.wallet.policy.dailyLimit) / 1e6 + " USDC");
   console.log("  Per-tx:   " + parseInt(data.wallet.policy.perTxLimit) / 1e6 + " USDC");
 
   if (mode === "managed" && data.setupUrl) {
     console.log("");
-    console.log("  ┌─────────────────────────────────────────┐");
-    console.log("  │  Send this link to your human:          │");
+    console.log("  ┌─ Setup link (send to your human) ───────┐");
+    console.log("  │  They register FaceID/fingerprint to     │");
+    console.log("  │  become owner and set spending limits.    │");
     console.log("  └─────────────────────────────────────────┘");
     console.log("");
     console.log("  " + data.setupUrl);
-    console.log("");
-    console.log("  They'll register a passkey (FaceID/fingerprint/YubiKey)");
-    console.log("  to become the wallet owner and set spending limits.");
   }
 
   if (mode === "unmanaged") {
     console.log("");
-    console.log("  No human owner. Agent has full control.");
-    console.log("  Fund the wallet to start transacting.");
+    console.log("  No human owner. You have full control.");
   }
+
+  console.log("");
+  console.log("  Next steps:");
+  console.log("    1. " + (mode === "managed" ? "Send setup link to your human" : "Fund the wallet"));
+  console.log("    2. Human sends ETH/USDC to " + data.wallet.address);
+  console.log("    3. Use your private key to sign transactions");
 
   // Machine-readable output for agents
   console.log("");
   console.log("---");
   print({
-    address: data.wallet.address,
-    agent: data.wallet.agent,
+    wallet: data.wallet.address,
+    agentAddress: agent,
+    agentPrivateKey: privateKey,
     mode,
     setupUrl: data.setupUrl || null,
     policy: data.wallet.policy
@@ -245,7 +252,9 @@ function help() {
     AGENTWALLET_API     API endpoint (default: https://agntos.dev/wallet)
 
   Examples:
-    agentwallet create --agent 0xABC...123
+    agentwallet create                          # generates key + deploys wallet
+    agentwallet create --agent 0xABC...123      # use existing key
+    agentwallet create --unmanaged              # no human owner
     agentwallet status 0xDEF...456
     agentwallet request-increase --wallet 0xDEF...456 --daily 200
 
