@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AgentWallet — Approve</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, sans-serif; background: #0a0b0f; color: #e4e4e7; min-height: 100vh; display: flex; align-items: center; justify-content: center; }
+  .container { max-width: 480px; width: 100%; padding: 20px; }
+  .card { background: #12141a; border: 1px solid #1e2028; border-radius: 16px; padding: 32px; }
+  h1 { font-size: 22px; font-weight: 700; margin-bottom: 8px; }
+  .sub { color: #71717a; font-size: 14px; margin-bottom: 24px; line-height: 1.5; }
+  .addr { font-family: monospace; font-size: 13px; color: #71717a; background: #0a0b0f; padding: 8px 12px; border-radius: 8px; margin-bottom: 20px; word-break: break-all; }
+  .hide { display: none; }
+  label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 6px; color: #71717a; text-transform: uppercase; letter-spacing: 0.5px; }
+  input { width: 100%; background: #0a0b0f; border: 1px solid #1e2028; border-radius: 8px; padding: 12px; color: #e4e4e7; font-size: 16px; font-family: monospace; outline: none; margin-bottom: 16px; }
+  input:focus { border-color: #f54900; }
+  .hint { font-size: 12px; color: #71717a; margin-top: -12px; margin-bottom: 16px; }
+  .btn { width: 100%; padding: 14px; border: none; border-radius: 10px; font-size: 15px; font-weight: 600; cursor: pointer; }
+  .btn-w { background: white; color: #000; }
+  .btn-r { background: #dc2626; color: white; margin-top: 12px; }
+  .btn-o { background: #f54900; color: white; }
+  .err { background: #2d1214; border: 1px solid #5c2124; color: #f87171; padding: 12px; border-radius: 8px; font-size: 13px; margin-bottom: 16px; display: none; }
+  .done { text-align: center; }
+  .chk { width: 48px; height: 48px; margin: 0 auto 16px; background: #3fb950; border-radius: 50%; display: flex; align-items: center; justify-content: center; }
+  .current { background: #0a0b0f; border-radius: 8px; padding: 12px; margin-bottom: 20px; font-size: 13px; }
+  .current span { color: #f54900; font-family: monospace; font-weight: 600; }
+  .row { display: flex; gap: 12px; margin-bottom: 16px; }
+  .row > div { flex: 1; }
+  .action-type { display: flex; gap: 8px; margin-bottom: 20px; }
+  .action-type button { flex: 1; padding: 10px; border: 1px solid #1e2028; border-radius: 8px; background: #0a0b0f; color: #71717a; font-size: 13px; font-weight: 600; cursor: pointer; }
+  .action-type button.sel { border-color: #f54900; color: #e4e4e7; }
+  pre { white-space: pre-wrap; font-size: 11px; color: #555; margin-top: 16px; max-height: 150px; overflow: auto; }
+</style>
+</head>
+<body>
+<div class="container">
+  <div class="card">
+    <div id="s1">
+      <h1>Manage wallet</h1>
+      <p class="sub">Authenticate with your passkey to change settings.</p>
+      <div class="addr" id="wa"></div>
+      <div class="current" id="cur">Loading current limits...</div>
+      <div class="err" id="e1"></div>
+
+      <div class="action-type" id="actions">
+        <button class="sel" onclick="setAction('limits')">Change Limits</button>
+        <button onclick="setAction('pause')">Pause</button>
+        <button onclick="setAction('unpause')">Unpause</button>
+      </div>
+
+      <div id="limits-form">
+        <label>New daily limit (USDC)</label>
+        <input type="number" id="dl" value="100" min="1">
+        <label>New per-transaction limit (USDC)</label>
+        <input type="number" id="pl" value="50" min="1">
+      </div>
+
+      <div id="pause-info" class="hide">
+        <p class="sub">This will immediately block ALL agent transactions until you unpause.</p>
+      </div>
+
+      <div id="unpause-info" class="hide">
+        <p class="sub">This will resume normal agent operations.</p>
+      </div>
+
+      <button class="btn btn-w" id="appbtn" onclick="doApprove()">Authenticate &amp; Apply</button>
+      <pre id="dbg"></pre>
+    </div>
+
+    <div id="s2" class="hide">
+      <div class="done">
+        <div class="chk"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg></div>
+        <h1 id="done-title">Updated</h1>
+        <p class="sub" id="done-msg">Changes applied on-chain.</p>
+        <div class="addr" id="wf"></div>
+      </div>
+    </div>
+  </div>
+</div>
+<script>
+var qs = new URLSearchParams(window.location.search);
+var wa = qs.get("wallet");
+var action = "limits";
+var dbg = document.getElementById("dbg");
+document.getElementById("wa").textContent = wa || "Unknown";
+document.getElementById("wf").textContent = wa || "";
+
+function log(m) { dbg.textContent += m + "\n"; }
+function err(msg) { var e = document.getElementById("e1"); e.textContent = msg; e.style.display = "block"; }
+function hideErr() { document.getElementById("e1").style.display = "none"; }
+
+function setAction(a) {
+  action = a;
+  var btns = document.getElementById("actions").children;
+  for (var i = 0; i < btns.length; i++) btns[i].className = "";
+  if (a === "limits") btns[0].className = "sel";
+  if (a === "pause") btns[1].className = "sel";
+  if (a === "unpause") btns[2].className = "sel";
+  document.getElementById("limits-form").className = a === "limits" ? "" : "hide";
+  document.getElementById("pause-info").className = a === "pause" ? "" : "hide";
+  document.getElementById("unpause-info").className = a === "unpause" ? "" : "hide";
+}
+
+// Load current policy — wrapped in setTimeout so it never blocks the main thread
+if (wa) {
+  setTimeout(function() {
+    try {
+      var x = new XMLHttpRequest();
+      x.open("GET", window.location.origin + "/wallet/wallet/" + wa, true);
+      x.timeout = 5000;
+      x.onload = function() {
+        try {
+          var d = JSON.parse(x.responseText);
+          if (d.wallet && d.wallet.policy) {
+            var p = d.wallet.policy;
+            var daily = parseInt(p.dailyLimit) / 1000000;
+            var perTx = parseInt(p.perTxLimit) / 1000000;
+            document.getElementById("cur").innerHTML =
+              "Current: <span>" + daily + " USDC/day</span>, <span>" + perTx + " USDC/tx</span>" +
+              (p.paused ? " — <span style='color:#dc2626'>PAUSED</span>" : "");
+            document.getElementById("dl").value = daily;
+            document.getElementById("pl").value = perTx;
+          }
+        } catch(e) { document.getElementById("cur").textContent = "Parse error"; }
+      };
+      x.onerror = function() { document.getElementById("cur").textContent = "Could not load limits"; };
+      x.ontimeout = function() { document.getElementById("cur").textContent = "Timeout loading limits"; };
+      x.send();
+    } catch(e) { document.getElementById("cur").textContent = "Error: " + e.message; }
+  }, 100);
+}
+
+function doApprove() {
+  hideErr();
+  var btn = document.getElementById("appbtn");
+  btn.disabled = true;
+  btn.textContent = "Waiting for passkey...";
+
+  log("action: " + action);
+
+  // Build the message to sign
+  var msg;
+  if (action === "limits") {
+    var dv = parseInt(document.getElementById("dl").value) * 1000000;
+    var pv = parseInt(document.getElementById("pl").value) * 1000000;
+    if (dv <= 0 || pv <= 0) { err("Must be > 0"); btn.disabled = false; btn.textContent = "Authenticate & Apply"; return; }
+    if (pv > dv) { err("Per-tx cannot exceed daily"); btn.disabled = false; btn.textContent = "Authenticate & Apply"; return; }
+    msg = { action: "setPolicy", wallet: wa, dailyLimit: "" + dv, perTxLimit: "" + pv };
+  } else if (action === "pause") {
+    msg = { action: "pause", wallet: wa };
+  } else {
+    msg = { action: "unpause", wallet: wa };
+  }
+
+  // Get challenge from server
+  log("requesting challenge...");
+  fetch(window.location.origin + "/wallet/approve/challenge", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(msg)
+  }).then(function(r) { return r.json(); }).then(function(challenge) {
+    if (challenge.error) throw new Error(challenge.error);
+    log("got challenge, requesting passkey...");
+
+    // Authenticate with passkey
+    var getOpts = {
+      publicKey: {
+        challenge: new TextEncoder().encode(challenge.challengeStr),
+        userVerification: "required",
+        timeout: 60000
+      }
+    };
+    // Pin to the exact credential that was registered with this wallet
+    if (challenge.credentialId) {
+      log("using stored credential ID");
+      var raw = atob(challenge.credentialId);
+      var buf = new Uint8Array(raw.length);
+      for (var i = 0; i < raw.length; i++) buf[i] = raw.charCodeAt(i);
+      getOpts.publicKey.allowCredentials = [{ type: "public-key", id: buf.buffer }];
+    }
+    return navigator.credentials.get(getOpts).then(function(assertion) {
+      log("passkey authenticated, sending to backend...");
+
+      var authData = new Uint8Array(assertion.response.authenticatorData);
+      var clientJSON = new Uint8Array(assertion.response.clientDataJSON);
+      var sig = new Uint8Array(assertion.response.signature);
+
+      return fetch(window.location.origin + "/wallet/approve/execute", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          wallet: wa,
+          action: msg.action,
+          dailyLimit: msg.dailyLimit,
+          perTxLimit: msg.perTxLimit,
+          challengeId: challenge.challengeId,
+          authenticatorData: arrToBase64(authData),
+          clientDataJSON: arrToBase64(clientJSON),
+          signature: arrToBase64(sig)
+        })
+      });
+    });
+  }).then(function(r) { return r.json(); }).then(function(d) {
+    if (d.error) throw new Error(d.error);
+    log("success! tx: " + d.txHash);
+    var titles = { setPolicy: "Limits updated", pause: "Wallet paused", unpause: "Wallet unpaused" };
+    document.getElementById("done-title").textContent = titles[msg.action] || "Updated";
+    document.getElementById("s1").className = "hide";
+    document.getElementById("s2").className = "";
+  }).catch(function(e) {
+    log("error: " + e.name + ": " + e.message);
+    err(e.message);
+    btn.disabled = false;
+    btn.textContent = "Authenticate & Apply";
+  });
+}
+
+function arrToBase64(buf) {
+  var bytes = new Uint8Array(buf);
+  var s = "";
+  for (var i = 0; i < bytes.length; i++) s += String.fromCharCode(bytes[i]);
+  return btoa(s);
+}
+</script>
+</body>
+</html>

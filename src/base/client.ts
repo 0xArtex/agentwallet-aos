@@ -24,7 +24,7 @@ export interface WalletInfo {
 
 export class BaseWalletClient {
   private provider: JsonRpcProvider;
-  private adminWallet: Wallet;
+  public adminWallet: Wallet;
   private factory: Contract;
 
   constructor(rpcUrl: string, adminPrivateKey: string, factoryAddress: string) {

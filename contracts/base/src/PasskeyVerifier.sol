@@ -8,7 +8,9 @@ pragma solidity ^0.8.24;
  *      Available on Base mainnet and Base Sepolia.
  */
 library PasskeyVerifier {
-    address constant P256_VERIFIER = 0x0000000000000000000000000000000000000100;
+    // Daimo's audited P256Verifier — deployed at deterministic CREATE2 address on all EVM chains
+    // Falls back from RIP-7212 precompile to pure Solidity verification
+    address constant P256_VERIFIER = 0xc2b78104907F722DABAc4C69f826a522B2754De4;
 
     /**
      * @notice Verify a P-256 signature.

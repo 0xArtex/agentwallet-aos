@@ -1,5 +1,5 @@
 import express from "express";
-import { readFileSync } from "fs";
+import { readFileSync, writeFileSync, mkdirSync, existsSync } from "fs";
 import { join, dirname } from "path";
 import { fileURLToPath } from "url";
 import crypto from "crypto";
@@ -11,6 +11,23 @@ app.use(express.json());
 
 // Setup tokens: token → {walletAddress, agentAddress, createdAt}
 const setupTokens = new Map<string, { wallet: string; agent: string; createdAt: number }>();
+
+// Wallet credential IDs: walletAddress → credentialId (base64) — persisted to disk
+const CREDS_FILE = join(dirname(fileURLToPath(import.meta.url)), "../../data/credentials.json");
+
+function loadCredentials(): Map<string, string> {
+  try {
+    const data = JSON.parse(readFileSync(CREDS_FILE, "utf-8"));
+    return new Map(Object.entries(data));
+  } catch { return new Map(); }
+}
+
+function saveCredentials(m: Map<string, string>) {
+  mkdirSync(dirname(CREDS_FILE), { recursive: true });
+  writeFileSync(CREDS_FILE, JSON.stringify(Object.fromEntries(m), null, 2));
+}
+
+const walletCredentials = loadCredentials();
 
 const PORT = parseInt(process.env.PORT || "3002");
 const BASE_RPC = process.env.BASE_RPC || "https://mainnet.base.org";
@@ -209,6 +226,10 @@ app.post("/setup/register-passkey", requireBase, async (req, res) => {
 
   try {
     const txHash = await baseClient!.registerPasskey(walletAddr, pubKeyX, pubKeyY);
+    if (credentialId) {
+      walletCredentials.set(walletAddr.toLowerCase(), credentialId);
+      saveCredentials(walletCredentials);
+    }
     setupTokens.delete(token);
     res.json({ success: true, txHash, message: "Passkey registered on-chain" });
   } catch (err: any) {
@@ -243,6 +264,150 @@ app.post("/setup/set-limits", requireBase, async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
+
+// ─── Approval Page ───
+app.get("/approve", (_req, res) => {
+  try {
+    const html = readFileSync(join(__dirname, "../web/approve.html"), "utf-8");
+    res.type("html").set("Cache-Control", "no-store").send(html);
+  } catch {
+    res.status(404).send("Approve page not found");
+  }
+});
+
+// Approval challenges: challengeId → {action, wallet, params, challengeStr, createdAt}
+const approvalChallenges = new Map<string, any>();
+
+// ─── Approval Challenge (step 1: agent or page requests a challenge) ───
+app.post("/approve/challenge", async (req, res) => {
+  const { action, wallet: walletAddr, dailyLimit, perTxLimit } = req.body;
+  if (!action || !walletAddr) return res.status(400).json({ error: "action and wallet required" });
+
+  const challengeId = crypto.randomBytes(32).toString("hex");
+  const challengeStr = `agentwallet:${action}:${walletAddr}:${challengeId}:${Date.now()}`;
+
+  approvalChallenges.set(challengeId, {
+    action, wallet: walletAddr, dailyLimit, perTxLimit,
+    challengeStr, createdAt: Date.now()
+  });
+  // Expire after 5 minutes
+  setTimeout(() => approvalChallenges.delete(challengeId), 300000);
+
+  const credId = walletCredentials.get(walletAddr.toLowerCase());
+  res.json({ challengeId, challengeStr, credentialId: credId || null });
+});
+
+// ─── Approval Execute (step 2: page sends passkey signature) ───
+app.post("/approve/execute", requireBase, async (req, res) => {
+  const { wallet: walletAddr, action, dailyLimit, perTxLimit, challengeId,
+          authenticatorData, clientDataJSON, signature } = req.body;
+
+  if (!walletAddr || !action || !challengeId || !authenticatorData || !clientDataJSON || !signature) {
+    return res.status(400).json({ error: "Missing required fields" });
+  }
+
+  const challenge = approvalChallenges.get(challengeId);
+  if (!challenge || challenge.wallet.toLowerCase() !== walletAddr.toLowerCase()) {
+    return res.status(403).json({ error: "Invalid or expired challenge" });
+  }
+
+  try {
+    // Decode base64 fields
+    const authDataBuf = Buffer.from(authenticatorData, "base64");
+    const authDataBytes = new Uint8Array(authDataBuf);
+    const clientJSONStr = Buffer.from(clientDataJSON, "base64").toString("utf-8");
+    const sigBytes = Buffer.from(signature, "base64");
+
+    console.log("[approve] authData:", "0x" + authDataBuf.toString("hex"));
+    console.log("[approve] clientDataJSON:", clientJSONStr);
+    console.log("[approve] sig:", "0x" + sigBytes.toString("hex"));
+
+    // Parse DER signature to r, s (as bytes32 hex strings)
+    const { r, s } = parseDERSignature(sigBytes);
+    console.log("[approve] r:", r);
+    console.log("[approve] s:", s);
+
+    // Manually verify with precompile to debug
+    const { createHash } = await import("crypto");
+    const clientDataHash = createHash("sha256").update(clientJSONStr).digest();
+    const msgHash = createHash("sha256").update(Buffer.concat([authDataBuf, clientDataHash])).digest();
+    console.log("[approve] messageHash:", "0x" + msgHash.toString("hex"));
+
+    // Get wallet contract — admin relays the passkey-signed tx
+    // The contract verifies the P-256 signature on-chain
+    const { Contract } = await import("ethers");
+    const WALLET_ABI = JSON.parse(readFileSync(join(__dirname, "../base/abi/AgentWallet.json"), "utf-8"));
+    const wallet = new Contract(walletAddr, WALLET_ABI, baseClient!.adminWallet);
+
+    let txHash: string;
+
+    if (action === "setPolicy") {
+      const tx = await wallet.setPolicyWithPasskey(
+        BigInt(dailyLimit || challenge.dailyLimit),
+        BigInt(perTxLimit || challenge.perTxLimit),
+        authDataBytes, clientJSONStr, r, s
+      );
+      txHash = (await tx.wait()).hash;
+    } else if (action === "pause") {
+      const tx = await wallet.pauseWithPasskey(authDataBytes, clientJSONStr, r, s);
+      txHash = (await tx.wait()).hash;
+    } else if (action === "unpause") {
+      const tx = await wallet.unpauseWithPasskey(authDataBytes, clientJSONStr, r, s);
+      txHash = (await tx.wait()).hash;
+    } else {
+      return res.status(400).json({ error: "Unknown action: " + action });
+    }
+
+    approvalChallenges.delete(challengeId);
+    res.json({ success: true, txHash, message: action + " executed" });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── Agent: Request Limit Increase ───
+// Agent calls this, gets back a URL to send to their human
+app.post("/approve/request", (_req, res) => {
+  const { wallet: walletAddr, dailyLimit, perTxLimit, reason } = _req.body;
+  if (!walletAddr) return res.status(400).json({ error: "wallet required" });
+
+  const host = process.env.BASE_URL || "https://agntos.dev";
+  const params = new URLSearchParams({ wallet: walletAddr });
+  if (dailyLimit) params.set("daily", dailyLimit);
+  if (perTxLimit) params.set("pertx", perTxLimit);
+  if (reason) params.set("reason", reason);
+
+  const approvalUrl = `${host}/wallet/approve?${params.toString()}`;
+  res.json({ approvalUrl, message: "Send this URL to your human to approve the change" });
+});
+
+// Parse DER-encoded ECDSA signature into r, s as bytes32
+function parseDERSignature(sig: Buffer): { r: string; s: string } {
+  // DER: 0x30 <len> 0x02 <rlen> <r> 0x02 <slen> <s>
+  let offset = 2; // skip 0x30 and total length
+  if (sig[offset] !== 0x02) throw new Error("Invalid DER: expected 0x02 for r");
+  offset++;
+  const rLen = sig[offset++];
+  let rBytes = sig.slice(offset, offset + rLen);
+  offset += rLen;
+  if (sig[offset] !== 0x02) throw new Error("Invalid DER: expected 0x02 for s");
+  offset++;
+  const sLen = sig[offset++];
+  let sBytes = sig.slice(offset, offset + sLen);
+
+  // Remove leading zeros (DER pads with 0x00 if high bit set)
+  if (rBytes.length === 33 && rBytes[0] === 0) rBytes = rBytes.slice(1);
+  if (sBytes.length === 33 && sBytes[0] === 0) sBytes = sBytes.slice(1);
+
+  // Pad to 32 bytes
+  const rPadded = Buffer.alloc(32); rBytes.copy(rPadded, 32 - rBytes.length);
+  const sPadded = Buffer.alloc(32); sBytes.copy(sPadded, 32 - sBytes.length);
+
+  return {
+    r: "0x" + rPadded.toString("hex"),
+    s: "0x" + sPadded.toString("hex")
+  };
+}
 
 app.listen(PORT, () => {
   console.log(`AgentWallet API on port ${PORT}`);
