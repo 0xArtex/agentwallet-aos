@@ -1,17 +1,18 @@
 # AgentWallet — Non-Custodial Smart Wallets for AI Agents
 
-Non-custodial smart wallets with on-chain policy enforcement. Your agent gets a real wallet with spending limits, blacklists, and human oversight — all enforced by smart contracts, not trust.
+Non-custodial smart wallets with on-chain policy enforcement. Your agent gets a real wallet with spending limits, human oversight via passkey (FaceID/YubiKey), and Chainlink oracle-based USD tracking — all enforced by smart contracts, not trust.
 
-**Network:** Base Sepolia (testnet)
+**Network:** Base (EVM)
 **Base URL:** `https://agntos.dev/wallet`
 
 ## Quick Start
 
-### 1. Create a wallet
+### 1. Create a managed wallet (recommended)
+
 ```bash
-curl -X POST https://agntos.dev/wallet \
+curl -X POST https://agntos.dev/wallet/wallet \
   -H "Content-Type: application/json" \
-  -d '{"owner": "<HUMAN_ADDRESS>", "agent": "<AGENT_ADDRESS>"}'
+  -d '{"agent": "0xYOUR_AGENT_ADDRESS"}'
 ```
 
 Response:
@@ -22,107 +23,135 @@ Response:
     "owner": "0x...",
     "agent": "0x...",
     "chain": "base",
-    "policy": {
-      "dailyLimit": "50000000",
-      "perTxLimit": "25000000",
-      "paused": false
-    },
+    "policy": { "dailyLimit": "50000000", "perTxLimit": "25000000", "paused": false },
     "spentToday": "0",
     "remainingDaily": "50000000",
     "gasBalance": "28000000000000"
-  }
+  },
+  "setupUrl": "https://agntos.dev/wallet/setup?token=...&wallet=0x...",
+  "mode": "managed"
 }
 ```
 
-- `owner` = human's address (controls policy, can pause/withdraw)
-- `agent` = agent's address (can transact within limits)
-- Gas is auto-funded on creation (~$0.07, covers ~140 txs)
-- Default limits: 50 USDC/day, 25 USDC/tx
+Send `setupUrl` to your human. They open it, set limits, register their passkey (FaceID/fingerprint/YubiKey). Done.
 
-### 2. Check wallet status
-```
-GET https://agntos.dev/wallet/<WALLET_ADDRESS>
-```
+- Default limits: $50/day, $25/tx
+- Gas auto-funded on creation (~$0.07, covers ~140 txs on Base)
 
-### 3. Predict wallet address (before creation)
+### 2. Create an unmanaged wallet (no human)
+
 ```bash
-curl -X POST https://agntos.dev/wallet/predict \
+curl -X POST https://agntos.dev/wallet/wallet \
   -H "Content-Type: application/json" \
-  -d '{"owner": "<HUMAN_ADDRESS>", "agent": "<AGENT_ADDRESS>"}'
+  -d '{"agent": "0xYOUR_AGENT_ADDRESS", "mode": "unmanaged"}'
 ```
+
+Agent is both owner and agent. Can change its own limits. No human in the loop.
+
+### 3. Check wallet status
+
+```bash
+curl https://agntos.dev/wallet/wallet/0xWALLET_ADDRESS
+```
+
+## Limit Tracking
+
+| Asset | How it's tracked | Limit type |
+|-------|-----------------|------------|
+| **ETH** | Converted to USD via Chainlink oracle | Shared USD daily + per-tx |
+| **USDC** | Direct (1:1 USD) | Same shared pool as ETH |
+| **Other ERC-20s** | Unlimited by default | Owner can set per-token limits |
+
+ETH + USDC share an **aggregated USD daily limit**. Spending $30 in ETH and $15 in USDC = $45 against a $50 daily limit.
 
 ## Transactions
 
-Agents transact directly with the smart contract on-chain using their private key. All transactions execute immediately if within limits. If limits are exceeded, the transaction reverts.
+Agents call the smart contract directly using their private key:
 
-The wallet contract is at the address returned by `/wallet`. Call `execute()` or `executeERC20()` with the agent's key:
+- `execute(to, value, data)` — send ETH or call any contract
+- `executeERC20(token, to, amount)` — transfer ERC-20 tokens
 
-- `execute(to, amount, data)` — send ETH or call any contract
-- `executeERC20(token, to, amount)` — transfer ERC20 tokens
+All transactions execute instantly or revert. No approval queues.
 
-## Policy Management (Human/Owner)
+## Human Approval Flow
 
-### Update limits
+Agents can request changes from their human via pre-filled URLs:
+
+### Request limit increase
+
 ```bash
-curl -X POST https://agntos.dev/wallet/<WALLET_ADDRESS>/policy \
+curl -X POST https://agntos.dev/wallet/approve/request \
   -H "Content-Type: application/json" \
-  -d '{"ownerKey": "<OWNER_PRIVATE_KEY>", "dailyLimit": "500000000", "perTxLimit": "200000000"}'
+  -d '{
+    "wallet": "0xWALLET",
+    "action": "limits",
+    "dailyLimit": "200",
+    "perTxLimit": "100",
+    "reason": "Need higher limits for trading"
+  }'
 ```
-Pass `0` for any field to keep the current value. Changes take effect immediately.
 
-### Blacklist an address
+Returns a URL. Agent sends it to human → human opens it → reviews the request → authenticates with passkey → changes applied on-chain.
+
+### Request token limit
+
 ```bash
-curl -X POST https://agntos.dev/wallet/<WALLET_ADDRESS>/blacklist \
+curl -X POST https://agntos.dev/wallet/approve/request \
   -H "Content-Type: application/json" \
-  -d '{"ownerKey": "<OWNER_PRIVATE_KEY>", "address": "0xSCAM...", "blocked": true}'
+  -d '{
+    "wallet": "0xWALLET",
+    "action": "tokenLimit",
+    "token": "0xTOKEN_ADDRESS",
+    "tokenDailyLimit": "1000",
+    "tokenPerTxLimit": "300",
+    "tokenDecimals": "18",
+    "reason": "Cap exposure on this token"
+  }'
 ```
 
-### Batch blacklist
-```bash
-curl -X POST https://agntos.dev/wallet/<WALLET_ADDRESS>/blacklist/batch \
-  -H "Content-Type: application/json" \
-  -d '{"ownerKey": "<OWNER_PRIVATE_KEY>", "addresses": ["0x...", "0x..."], "blocked": true}'
-```
+### Other actions
 
-### Check if address is blacklisted
-```
-GET https://agntos.dev/wallet/<WALLET_ADDRESS>/blacklist/<TARGET_ADDRESS>
-```
+| Action | Description |
+|--------|-------------|
+| `limits` | Change USD daily/per-tx limits |
+| `tokenLimit` | Set per-token ERC-20 limit |
+| `removeTokenLimit` | Remove a token limit (back to unlimited) |
+| `pause` | Emergency pause — all agent txs revert |
+| `unpause` | Resume agent operations |
 
-## How It Works
-
-- **Hard limits, not queues** — transactions execute instantly or revert. No approval queues.
-- **Daily limit** — resets every 24h. Hit it? Wait for tomorrow or ask human to raise it.
-- **Per-tx limit** — single transaction cap. Prevents draining.
-- **Blacklist** — human blocks specific addresses. Agent can never send to them.
-- **Pause** — emergency brake. Human pauses, all agent txs revert until unpaused.
-- **Emergency withdraw** — human can pull all funds at any time.
-- **Agent key rotation** — human can replace or revoke the agent's key instantly.
+Human can also open `https://agntos.dev/wallet/approve?wallet=0x...` directly to manage the wallet manually (no pre-fill).
 
 ## Endpoints
 
 | Method | Path | Description |
 |--------|------|-------------|
-| GET | /wallet/health | Service health + chain status |
-| POST | /wallet | Create new wallet |
-| GET | /wallet/:address | Get wallet info + policy + balances |
-| POST | /wallet/predict | Predict address before creation |
-| POST | /wallet/:address/policy | Update spending limits |
-| POST | /wallet/:address/blacklist | Block/unblock an address |
-| POST | /wallet/:address/blacklist/batch | Batch block/unblock |
-| GET | /wallet/:address/blacklist/:target | Check if address is blocked |
-| POST | /wallet/:address/topup | Top up gas (admin) |
-| GET | /wallet/stats | Total wallets deployed |
+| POST | `/wallet` | Create wallet (managed or unmanaged) |
+| GET | `/wallet/:address` | Wallet info, policy, balances |
+| GET | `/stats` | Total wallets deployed |
+| GET | `/setup` | Human passkey registration page |
+| GET | `/approve` | Human approval/management page |
+| POST | `/approve/request` | Generate pre-filled approval URL |
+| POST | `/approve/challenge` | Get passkey challenge |
+| POST | `/approve/execute` | Submit passkey-signed action |
+| POST | `/setup/set-limits` | Set limits during setup |
+| POST | `/setup/register-passkey` | Register passkey during setup |
+
+All paths are relative to `https://agntos.dev/wallet`.
 
 ## Security Model
 
 - **Non-custodial**: agent's private key never leaves the agent's machine
-- **On-chain enforcement**: policies are in the smart contract, not in our API
-- **No backdoors**: even we (the provider) cannot move funds or override policies
-- **Human controls**: owner can pause, withdraw, revoke, blacklist at any time
-- **Gas auto-funded**: agent never needs to acquire gas manually
+- **On-chain enforcement**: limits are in the smart contract, not the API
+- **Passkey ownership**: human's private key lives in device secure enclave (FaceID/YubiKey), verified on-chain via RIP-7212 P-256 precompile
+- **Backend is a relay**: passes passkey signatures to chain, cannot forge them
+- **Chainlink oracle**: ETH price from decentralized oracle network, 1-hour staleness check
+- **No backdoors**: even the provider cannot move funds or override limits
+- **Emergency controls**: owner can pause, withdraw, revoke, blacklist at any time
 
-## Contract Addresses (Base Sepolia)
+## Contract Addresses
 
-- Factory: `0x449bd8C8105f0584ab8437596D553cDf4a457aa4`
-- Chain ID: 84532
+**Base Sepolia (testnet)**
+- Factory: `0x8eD17B67B8C1A24020236987BeD28F9609e93B06`
+- Implementation: `0xFB93e5245303827426Fb1A40D9168Cb738de1F2f`
+
+**Base Mainnet** — deployment pending
