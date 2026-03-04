@@ -126,14 +126,20 @@ curl https://agntos.dev/wallet/stats
 
 ### Deployments
 
+**Base Mainnet**
+| Contract | Address |
+|----------|---------|
+| Factory | `0x77c2a63BB08b090b46eb612235604dEB8150A4A1` |
+| Implementation | `0xEF85c0F9D468632Ff97a36235FC73d70cc19BAbA` |
+| Chainlink ETH/USD | `0x71041dddad3595F9CEd3DcCFBe3D1F4b0a16Bb70` |
+| USDC | `0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913` |
+
 **Base Sepolia (testnet)**
 | Contract | Address |
 |----------|---------|
 | Factory | `0x8eD17B67B8C1A24020236987BeD28F9609e93B06` |
 | Implementation | `0xFB93e5245303827426Fb1A40D9168Cb738de1F2f` |
 | Mock Oracle | `0x65E246C24118CF6439152d725Ad0072ce469805c` |
-
-**Base Mainnet** — deployment pending
 
 ## Project structure
 
