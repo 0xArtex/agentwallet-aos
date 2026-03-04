@@ -98,8 +98,10 @@ if (isTG) {
   if (window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.openLink) {
     window.Telegram.WebApp.openLink(window.location.href);
   } else {
-    // Fallback: show copy+open button
+    // Fallback: show copy+open button, disable form
     document.getElementById("tg-warn").className = "";
+    document.querySelectorAll(".btn").forEach(function(b) { if (b.textContent !== "Copy Link & Open in Safari") { b.disabled = true; b.style.opacity = "0.3"; } });
+    document.querySelectorAll("input").forEach(function(i) { i.disabled = true; i.style.opacity = "0.5"; });
   }
 } else if (!window.PublicKeyCredential) {
   // Browser doesn't support WebAuthn at all
