@@ -16,6 +16,8 @@ AgentWallet gives AI agents real wallets on **Base** with built-in spending limi
 
 ## How it works
 
+![Architecture](docs/architecture.png)
+
 ```
 Agent creates wallet → Human registers passkey → Agent transacts within limits
                               ↓
