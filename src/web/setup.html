@@ -77,8 +77,9 @@
     <!-- Telegram in-app browser warning -->
     <div id="tg-warn" class="hide">
       <div class="telegram-hint">
-        <p class="sub" style="margin-bottom:8px">Passkeys don't work in Telegram's built-in browser.</p>
-        <a id="safari-link" href="#" target="_blank" rel="noopener">Open in Browser</a>
+        <p class="sub" style="margin-bottom:8px">Passkeys require Safari or Chrome. Telegram's browser doesn't support them.</p>
+        <button class="btn btn-primary" style="margin-bottom:8px" onclick="copyAndOpen()">Copy Link & Open in Safari</button>
+        <p class="sub" style="font-size:11px;color:#52525b" id="copy-status">Copies the URL so you can paste it in your browser</p>
       </div>
     </div>
   </div>
@@ -97,20 +98,45 @@ if (isTG) {
   if (window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.openLink) {
     window.Telegram.WebApp.openLink(window.location.href);
   } else {
-    // Fallback: force open in system browser
+    // Fallback: show copy+open button
     document.getElementById("tg-warn").className = "";
-    var link = document.getElementById("safari-link");
-    link.href = window.location.href;
-    link.onclick = function(e) {
-      e.preventDefault();
-      window.open(window.location.href, "_system");
-    };
   }
 } else if (!window.PublicKeyCredential) {
   // Browser doesn't support WebAuthn at all
   document.getElementById("tg-warn").className = "";
   document.getElementById("safari-link").href = window.location.href;
   document.querySelector("#tg-warn .sub").textContent = "This browser doesn't support passkeys. Please open in your browser.";
+}
+
+function copyAndOpen() {
+  var url = window.location.href;
+  var st = document.getElementById("copy-status");
+  // Copy to clipboard
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(url).then(function() {
+      st.textContent = "Copied! Paste in Safari or Chrome.";
+      st.style.color = "#3fb950";
+    }).catch(function() { fallbackCopy(url, st); });
+  } else {
+    fallbackCopy(url, st);
+  }
+  // Try iOS Safari scheme
+  var isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
+  if (isIOS) {
+    window.location.href = "x-safari-" + url;
+  }
+}
+
+function fallbackCopy(url, st) {
+  var ta = document.createElement("textarea");
+  ta.value = url;
+  ta.style.cssText = "position:fixed;left:-9999px";
+  document.body.appendChild(ta);
+  ta.select();
+  document.execCommand("copy");
+  document.body.removeChild(ta);
+  st.textContent = "Copied! Paste in Safari or Chrome.";
+  st.style.color = "#3fb950";
 }
 
 function showErr(n, msg) { var e = document.getElementById("e" + n); e.textContent = msg; e.style.display = "block"; }

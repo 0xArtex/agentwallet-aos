@@ -137,10 +137,10 @@ if (isTG) {
   if (window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.openLink) {
     window.Telegram.WebApp.openLink(window.location.href);
   } else {
-    // Show banner
+    // Show banner with copy button
     var b = document.createElement("div");
     b.style.cssText = "margin-bottom:16px;padding:12px;background:#0a0b0f;border:1px solid #1e2028;border-radius:8px;text-align:center;";
-    b.innerHTML = '<p style="color:#71717a;font-size:14px;margin-bottom:8px">Passkeys don\'t work in Telegram\'s browser.</p><a href="#" onclick="event.preventDefault();window.open(window.location.href,\'_system\')" style="color:#f54900;font-weight:600;text-decoration:none">Open in Browser</a>';
+    b.innerHTML = '<p style="color:#71717a;font-size:14px;margin-bottom:8px">Passkeys require Safari or Chrome.</p><button style="width:100%;padding:12px;border:none;border-radius:10px;font-size:14px;font-weight:600;cursor:pointer;background:#f54900;color:white;margin-bottom:6px" onclick="var u=window.location.href;var s=this.nextElementSibling;if(navigator.clipboard){navigator.clipboard.writeText(u).then(function(){s.textContent=\'Copied! Paste in Safari or Chrome.\';s.style.color=\'#3fb950\'});}else{var t=document.createElement(\'textarea\');t.value=u;t.style.cssText=\'position:fixed;left:-9999px\';document.body.appendChild(t);t.select();document.execCommand(\'copy\');document.body.removeChild(t);s.textContent=\'Copied! Paste in Safari or Chrome.\';s.style.color=\'#3fb950\';}if(/iPhone|iPad|iPod/i.test(navigator.userAgent))window.location.href=\'x-safari-\'+u;">Copy Link & Open in Safari</button><p style="font-size:11px;color:#52525b">Copies the URL so you can paste it in your browser</p>';
     var card = document.querySelector(".card");
     card.insertBefore(b, card.firstChild);
   }
