@@ -133,8 +133,23 @@
 <script>
 // Detect Telegram/WebView — auto-open in system browser
 var isTG = /Telegram/i.test(navigator.userAgent) || (window.TelegramWebviewProxy) || (window.Telegram && window.Telegram.WebApp);
-if (isTG && window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.openLink) {
-  window.Telegram.WebApp.openLink(window.location.href);
+if (isTG) {
+  if (window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.openLink) {
+    window.Telegram.WebApp.openLink(window.location.href);
+  } else {
+    // Show banner
+    var b = document.createElement("div");
+    b.style.cssText = "margin-bottom:16px;padding:12px;background:#0a0b0f;border:1px solid #1e2028;border-radius:8px;text-align:center;";
+    b.innerHTML = '<p style="color:#71717a;font-size:14px;margin-bottom:8px">Passkeys don\'t work in Telegram\'s browser.</p><a href="#" onclick="event.preventDefault();window.open(window.location.href,\'_system\')" style="color:#f54900;font-weight:600;text-decoration:none">Open in Browser</a>';
+    var card = document.querySelector(".card");
+    card.insertBefore(b, card.firstChild);
+  }
+} else if (!window.PublicKeyCredential) {
+  var b = document.createElement("div");
+  b.style.cssText = "margin-bottom:16px;padding:12px;background:#0a0b0f;border:1px solid #1e2028;border-radius:8px;text-align:center;";
+  b.innerHTML = '<p style="color:#71717a;font-size:14px">This browser doesn\'t support passkeys. Please open in your browser.</p>';
+  var card = document.querySelector(".card");
+  card.insertBefore(b, card.firstChild);
 }
 
 var qs = new URLSearchParams(window.location.search);

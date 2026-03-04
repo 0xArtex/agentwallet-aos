@@ -78,7 +78,7 @@
     <div id="tg-warn" class="hide">
       <div class="telegram-hint">
         <p class="sub" style="margin-bottom:8px">Passkeys don't work in Telegram's built-in browser.</p>
-        <a id="safari-link" href="#">Open in Safari</a>
+        <a id="safari-link" href="#" target="_blank" rel="noopener">Open in Browser</a>
       </div>
     </div>
   </div>
@@ -97,15 +97,20 @@ if (isTG) {
   if (window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.openLink) {
     window.Telegram.WebApp.openLink(window.location.href);
   } else {
-    // Fallback: show manual link
+    // Fallback: force open in system browser
     document.getElementById("tg-warn").className = "";
-    document.getElementById("safari-link").href = window.location.href;
+    var link = document.getElementById("safari-link");
+    link.href = window.location.href;
+    link.onclick = function(e) {
+      e.preventDefault();
+      window.open(window.location.href, "_system");
+    };
   }
 } else if (!window.PublicKeyCredential) {
   // Browser doesn't support WebAuthn at all
   document.getElementById("tg-warn").className = "";
   document.getElementById("safari-link").href = window.location.href;
-  document.querySelector("#tg-warn .sub").textContent = "This browser doesn't support passkeys. Please open in Safari or Chrome.";
+  document.querySelector("#tg-warn .sub").textContent = "This browser doesn't support passkeys. Please open in your browser.";
 }
 
 function showErr(n, msg) { var e = document.getElementById("e" + n); e.textContent = msg; e.style.display = "block"; }
