@@ -7,186 +7,354 @@
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
   body { font-family: -apple-system, sans-serif; background: #0a0b0f; color: #e4e4e7; min-height: 100vh; display: flex; align-items: center; justify-content: center; }
-  .container { max-width: 480px; width: 100%; padding: 20px; }
-  .card { background: #12141a; border: 1px solid #1e2028; border-radius: 16px; padding: 32px; }
-  h1 { font-size: 22px; font-weight: 700; margin-bottom: 8px; }
-  .sub { color: #71717a; font-size: 14px; margin-bottom: 24px; line-height: 1.5; }
-  .addr { font-family: monospace; font-size: 13px; color: #71717a; background: #0a0b0f; padding: 8px 12px; border-radius: 8px; margin-bottom: 20px; word-break: break-all; }
+  .container { max-width: 420px; width: 100%; padding: 20px; }
+  .card { background: #12141a; border: 1px solid #1e2028; border-radius: 16px; padding: 28px; }
+  h1 { font-size: 20px; font-weight: 700; margin-bottom: 4px; }
+  .sub { color: #71717a; font-size: 14px; margin-bottom: 20px; line-height: 1.5; }
+  .addr { font-family: monospace; font-size: 12px; color: #52525b; margin-bottom: 20px; word-break: break-all; }
   .hide { display: none; }
-  label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 6px; color: #71717a; text-transform: uppercase; letter-spacing: 0.5px; }
-  input { width: 100%; background: #0a0b0f; border: 1px solid #1e2028; border-radius: 8px; padding: 12px; color: #e4e4e7; font-size: 16px; font-family: monospace; outline: none; margin-bottom: 16px; }
+
+  .request-box { background: #0a0b0f; border: 1px solid #1e2028; border-radius: 12px; padding: 16px; margin-bottom: 20px; }
+  .request-label { font-size: 11px; color: #71717a; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px; }
+  .request-reason { font-size: 14px; color: #e4e4e7; margin-bottom: 12px; line-height: 1.4; }
+  .request-detail { display: flex; justify-content: space-between; padding: 8px 0; border-top: 1px solid #1e2028; font-size: 13px; }
+  .request-detail:first-of-type { border-top: none; }
+  .request-detail .label { color: #71717a; }
+  .request-detail .value { color: #e4e4e7; font-family: monospace; font-weight: 600; }
+  .request-detail .value.addr-val { font-size: 11px; max-width: 200px; overflow: hidden; text-overflow: ellipsis; }
+
+  .edit-link { color: #71717a; font-size: 12px; text-align: center; margin-bottom: 16px; cursor: pointer; text-decoration: underline; }
+  .edit-link:hover { color: #e4e4e7; }
+
+  label { display: block; font-size: 12px; font-weight: 600; margin-bottom: 4px; color: #71717a; text-transform: uppercase; letter-spacing: 0.5px; }
+  input { width: 100%; background: #0a0b0f; border: 1px solid #1e2028; border-radius: 8px; padding: 10px 12px; color: #e4e4e7; font-size: 15px; font-family: monospace; outline: none; margin-bottom: 12px; }
   input:focus { border-color: #f54900; }
-  .hint { font-size: 12px; color: #71717a; margin-top: -12px; margin-bottom: 16px; }
-  .btn { width: 100%; padding: 14px; border: none; border-radius: 10px; font-size: 15px; font-weight: 600; cursor: pointer; }
-  .btn-w { background: white; color: #000; }
-  .btn-r { background: #dc2626; color: white; margin-top: 12px; }
-  .btn-o { background: #f54900; color: white; }
-  .err { background: #2d1214; border: 1px solid #5c2124; color: #f87171; padding: 12px; border-radius: 8px; font-size: 13px; margin-bottom: 16px; display: none; }
+
+  .btns { display: flex; gap: 10px; }
+  .btn { flex: 1; padding: 14px; border: none; border-radius: 10px; font-size: 15px; font-weight: 600; cursor: pointer; }
+  .btn-approve { background: white; color: #000; }
+  .btn-reject { background: #1e2028; color: #71717a; }
+  .btn-approve:disabled { opacity: 0.5; cursor: not-allowed; }
+
+  .err { background: #2d1214; border: 1px solid #5c2124; color: #f87171; padding: 10px 12px; border-radius: 8px; font-size: 13px; margin-bottom: 14px; display: none; }
+
   .done { text-align: center; }
-  .chk { width: 48px; height: 48px; margin: 0 auto 16px; background: #3fb950; border-radius: 50%; display: flex; align-items: center; justify-content: center; }
-  .current { background: #0a0b0f; border-radius: 8px; padding: 12px; margin-bottom: 20px; font-size: 13px; }
-  .current span { color: #f54900; font-family: monospace; font-weight: 600; }
-  .row { display: flex; gap: 12px; margin-bottom: 16px; }
-  .row > div { flex: 1; }
-  .action-type { display: flex; gap: 8px; margin-bottom: 20px; }
-  .action-type button { flex: 1; padding: 10px; border: 1px solid #1e2028; border-radius: 8px; background: #0a0b0f; color: #71717a; font-size: 13px; font-weight: 600; cursor: pointer; }
-  .action-type button.sel { border-color: #f54900; color: #e4e4e7; }
-  pre { white-space: pre-wrap; font-size: 11px; color: #555; margin-top: 16px; max-height: 150px; overflow: auto; }
+  .chk { width: 48px; height: 48px; margin: 0 auto 16px; border-radius: 50%; display: flex; align-items: center; justify-content: center; }
+  .chk-ok { background: #3fb950; }
+  .chk-no { background: #52525b; }
+  .done h1 { margin-bottom: 8px; }
+
+  /* Manual mode tabs */
+  .tabs { display: flex; gap: 6px; margin-bottom: 16px; }
+  .tabs button { flex: 1; padding: 8px; border: 1px solid #1e2028; border-radius: 8px; background: #0a0b0f; color: #71717a; font-size: 12px; font-weight: 600; cursor: pointer; }
+  .tabs button.sel { border-color: #f54900; color: #e4e4e7; }
+  .hint { font-size: 11px; color: #52525b; margin-top: -8px; margin-bottom: 12px; }
 </style>
 </head>
 <body>
 <div class="container">
   <div class="card">
-    <div id="s1">
+
+    <!-- Agent request view (pre-filled) -->
+    <div id="s-request" class="hide">
+      <h1>Agent request</h1>
+      <p class="sub">Your agent wants to make a change.</p>
+      <div class="addr" id="wa1"></div>
+
+      <div class="request-box">
+        <div class="request-label">Request</div>
+        <div class="request-reason" id="reason-text"></div>
+        <div id="request-details"></div>
+      </div>
+
+      <div class="err" id="e-req"></div>
+      <div class="edit-link" id="edit-link" onclick="showEdit()">Edit before approving</div>
+      <div id="edit-fields" class="hide"></div>
+
+      <div class="btns">
+        <button class="btn btn-reject" onclick="doReject()">Reject</button>
+        <button class="btn btn-approve" id="btn-approve" onclick="doApprove()">Approve</button>
+      </div>
+    </div>
+
+    <!-- Manual mode (no pre-fill) -->
+    <div id="s-manual" class="hide">
       <h1>Manage wallet</h1>
-      <p class="sub">Authenticate with your passkey to change settings.</p>
-      <div class="addr" id="wa"></div>
-      <div class="current" id="cur">Loading current limits...</div>
-      <div class="err" id="e1"></div>
+      <p class="sub">Choose an action and authenticate.</p>
+      <div class="addr" id="wa2"></div>
+      <div class="current" id="cur" style="background:#0a0b0f;border-radius:8px;padding:12px;margin-bottom:16px;font-size:13px"></div>
+      <div class="err" id="e-man"></div>
 
-      <div class="action-type" id="actions">
-        <button class="sel" onclick="setAction('limits')">Change Limits</button>
-        <button onclick="setAction('pause')">Pause</button>
-        <button onclick="setAction('unpause')">Unpause</button>
+      <div class="tabs" id="tabs">
+        <button class="sel" onclick="setTab('limits')">USD Limits</button>
+        <button onclick="setTab('tokenLimit')">Token</button>
+        <button onclick="setTab('pause')">Pause</button>
+        <button onclick="setTab('unpause')">Unpause</button>
       </div>
 
-      <div id="limits-form">
-        <label>New daily limit (USDC)</label>
-        <input type="number" id="dl" value="100" min="1">
-        <label>New per-transaction limit (USDC)</label>
-        <input type="number" id="pl" value="50" min="1">
+      <div id="f-limits">
+        <label>Daily limit (USD)</label>
+        <input type="number" id="m-dl" value="100" min="1">
+        <label>Per-transaction limit (USD)</label>
+        <input type="number" id="m-pl" value="50" min="1">
+      </div>
+      <div id="f-token" class="hide">
+        <label>Token address</label>
+        <input type="text" id="m-ta" placeholder="0x..." style="font-size:13px">
+        <label>Daily limit (token units)</label>
+        <input type="number" id="m-tdl" value="1000" min="0">
+        <label>Per-tx limit (token units)</label>
+        <input type="number" id="m-tpl" value="500" min="0">
+        <label>Decimals</label>
+        <input type="number" id="m-tdc" value="18" min="0" max="18">
+        <p class="hint">Set both to 0 to remove the limit.</p>
+      </div>
+      <div id="f-pause" class="hide">
+        <p class="sub">Immediately block all agent transactions.</p>
+      </div>
+      <div id="f-unpause" class="hide">
+        <p class="sub">Resume normal agent operations.</p>
       </div>
 
-      <div id="pause-info" class="hide">
-        <p class="sub">This will immediately block ALL agent transactions until you unpause.</p>
-      </div>
-
-      <div id="unpause-info" class="hide">
-        <p class="sub">This will resume normal agent operations.</p>
-      </div>
-
-      <button class="btn btn-w" id="appbtn" onclick="doApprove()">Authenticate &amp; Apply</button>
-      <pre id="dbg"></pre>
+      <button class="btn btn-approve" id="btn-manual" onclick="doManualApprove()" style="width:100%">Authenticate & Apply</button>
     </div>
 
-    <div id="s2" class="hide">
+    <!-- Done -->
+    <div id="s-done" class="hide">
       <div class="done">
-        <div class="chk"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg></div>
-        <h1 id="done-title">Updated</h1>
-        <p class="sub" id="done-msg">Changes applied on-chain.</p>
-        <div class="addr" id="wf"></div>
+        <div class="chk" id="done-chk"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg></div>
+        <h1 id="done-title">Done</h1>
+        <p class="sub" id="done-msg"></p>
       </div>
     </div>
+
   </div>
 </div>
 <script>
 var qs = new URLSearchParams(window.location.search);
-var wa = qs.get("wallet");
-var action = "limits";
-var dbg = document.getElementById("dbg");
-document.getElementById("wa").textContent = wa || "Unknown";
-document.getElementById("wf").textContent = wa || "";
+var wa = qs.get("wallet") || "";
+var p = {
+  action: qs.get("action"),
+  daily: qs.get("daily"),
+  pertx: qs.get("pertx"),
+  token: qs.get("token"),
+  tdl: qs.get("tdl"),
+  tpl: qs.get("tpl"),
+  dec: qs.get("dec") || "18",
+  reason: qs.get("reason")
+};
 
-function log(m) { dbg.textContent += m + "\n"; }
-function err(msg) { var e = document.getElementById("e1"); e.textContent = msg; e.style.display = "block"; }
-function hideErr() { document.getElementById("e1").style.display = "none"; }
+// Decide: agent request view or manual mode
+var isRequest = p.action || p.daily || p.token;
+var manualTab = "limits";
 
-function setAction(a) {
-  action = a;
-  var btns = document.getElementById("actions").children;
-  for (var i = 0; i < btns.length; i++) btns[i].className = "";
-  if (a === "limits") btns[0].className = "sel";
-  if (a === "pause") btns[1].className = "sel";
-  if (a === "unpause") btns[2].className = "sel";
-  document.getElementById("limits-form").className = a === "limits" ? "" : "hide";
-  document.getElementById("pause-info").className = a === "pause" ? "" : "hide";
-  document.getElementById("unpause-info").className = a === "unpause" ? "" : "hide";
+if (isRequest) {
+  document.getElementById("s-request").className = "";
+  document.getElementById("wa1").textContent = wa;
+  buildRequestView();
+} else {
+  document.getElementById("s-manual").className = "";
+  document.getElementById("wa2").textContent = wa;
+  loadCurrentPolicy();
 }
 
-// Load current policy — wrapped in setTimeout so it never blocks the main thread
-if (wa) {
-  setTimeout(function() {
-    try {
-      var x = new XMLHttpRequest();
-      x.open("GET", window.location.origin + "/wallet/wallet/" + wa, true);
-      x.timeout = 5000;
-      x.onload = function() {
-        try {
-          var d = JSON.parse(x.responseText);
-          if (d.wallet && d.wallet.policy) {
-            var p = d.wallet.policy;
-            var daily = parseInt(p.dailyLimit) / 1000000;
-            var perTx = parseInt(p.perTxLimit) / 1000000;
-            document.getElementById("cur").innerHTML =
-              "Current: <span>" + daily + " USDC/day</span>, <span>" + perTx + " USDC/tx</span>" +
-              (p.paused ? " — <span style='color:#dc2626'>PAUSED</span>" : "");
-            document.getElementById("dl").value = daily;
-            document.getElementById("pl").value = perTx;
-          }
-        } catch(e) { document.getElementById("cur").textContent = "Parse error"; }
-      };
-      x.onerror = function() { document.getElementById("cur").textContent = "Could not load limits"; };
-      x.ontimeout = function() { document.getElementById("cur").textContent = "Timeout loading limits"; };
-      x.send();
-    } catch(e) { document.getElementById("cur").textContent = "Error: " + e.message; }
-  }, 100);
+function buildRequestView() {
+  var details = document.getElementById("request-details");
+  var reasonEl = document.getElementById("reason-text");
+
+  // Determine what's being requested
+  var act = p.action || "limits";
+  var reasonText = p.reason || "";
+
+  if (act === "tokenLimit" || act === "setTokenLimit") {
+    if (!reasonText) reasonText = "Set a spending limit on a token.";
+    addDetail(details, "Action", "Set token limit");
+    addDetail(details, "Token", p.token || "—", true);
+    addDetail(details, "Daily limit", (p.tdl || "—") + " tokens");
+    addDetail(details, "Per-tx limit", (p.tpl || "—") + " tokens");
+  } else if (act === "removeTokenLimit") {
+    if (!reasonText) reasonText = "Remove spending limit on a token.";
+    addDetail(details, "Action", "Remove token limit");
+    addDetail(details, "Token", p.token || "—", true);
+  } else if (act === "pause") {
+    if (!reasonText) reasonText = "Pause all agent transactions.";
+    addDetail(details, "Action", "Pause wallet");
+  } else if (act === "unpause") {
+    if (!reasonText) reasonText = "Resume agent transactions.";
+    addDetail(details, "Action", "Unpause wallet");
+  } else {
+    if (!reasonText) reasonText = "Change wallet spending limits.";
+    addDetail(details, "Action", "Update USD limits");
+    if (p.daily) addDetail(details, "Daily limit", "$" + p.daily);
+    if (p.pertx) addDetail(details, "Per-tx limit", "$" + p.pertx);
+  }
+
+  reasonEl.textContent = reasonText;
+}
+
+function addDetail(container, label, value, isAddr) {
+  var d = document.createElement("div");
+  d.className = "request-detail";
+  d.innerHTML = '<span class="label">' + label + '</span><span class="value' + (isAddr ? ' addr-val' : '') + '">' + value + '</span>';
+  container.appendChild(d);
+}
+
+function showEdit() {
+  var el = document.getElementById("edit-fields");
+  var link = document.getElementById("edit-link");
+  if (el.className === "hide") {
+    el.className = "";
+    link.textContent = "Hide editor";
+    buildEditFields();
+  } else {
+    el.className = "hide";
+    link.textContent = "Edit before approving";
+  }
+}
+
+function buildEditFields() {
+  var el = document.getElementById("edit-fields");
+  if (el.children.length > 0) return;
+  var act = p.action || "limits";
+
+  if (act === "tokenLimit" || act === "setTokenLimit") {
+    el.innerHTML =
+      '<label>Daily limit (token units)</label><input type="number" id="e-tdl" value="' + (p.tdl||1000) + '">' +
+      '<label>Per-tx limit (token units)</label><input type="number" id="e-tpl" value="' + (p.tpl||500) + '">';
+  } else if (act === "limits" || (!act && (p.daily || p.pertx))) {
+    el.innerHTML =
+      '<label>Daily limit (USD)</label><input type="number" id="e-dl" value="' + (p.daily||100) + '">' +
+      '<label>Per-tx limit (USD)</label><input type="number" id="e-pl" value="' + (p.pertx||50) + '">';
+  } else {
+    el.innerHTML = '<p class="sub">Nothing to edit for this action.</p>';
+  }
+}
+
+function doReject() {
+  document.getElementById("s-request").className = "hide";
+  document.getElementById("s-done").className = "";
+  document.getElementById("done-chk").className = "chk chk-no";
+  document.getElementById("done-chk").innerHTML = '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>';
+  document.getElementById("done-title").textContent = "Rejected";
+  document.getElementById("done-msg").textContent = "No changes were made.";
 }
 
 function doApprove() {
-  hideErr();
-  var btn = document.getElementById("appbtn");
+  var btn = document.getElementById("btn-approve");
   btn.disabled = true;
-  btn.textContent = "Waiting for passkey...";
+  btn.textContent = "Waiting...";
+  hideErr("e-req");
 
-  log("action: " + action);
+  var act = p.action || "limits";
+  var msg = { wallet: wa };
 
-  // Build the message to sign
-  var msg;
-  if (action === "limits") {
-    var dv = parseInt(document.getElementById("dl").value) * 1000000;
-    var pv = parseInt(document.getElementById("pl").value) * 1000000;
-    if (dv <= 0 || pv <= 0) { err("Must be > 0"); btn.disabled = false; btn.textContent = "Authenticate & Apply"; return; }
-    if (pv > dv) { err("Per-tx cannot exceed daily"); btn.disabled = false; btn.textContent = "Authenticate & Apply"; return; }
-    msg = { action: "setPolicy", wallet: wa, dailyLimit: "" + dv, perTxLimit: "" + pv };
-  } else if (action === "pause") {
-    msg = { action: "pause", wallet: wa };
+  // Read possibly-edited values
+  if (act === "tokenLimit" || act === "setTokenLimit") {
+    var tdl = document.getElementById("e-tdl") ? document.getElementById("e-tdl").value : p.tdl;
+    var tpl = document.getElementById("e-tpl") ? document.getElementById("e-tpl").value : p.tpl;
+    var dec = parseInt(p.dec) || 18;
+    msg.action = "setTokenLimit";
+    msg.token = p.token;
+    msg.tokenDailyLimit = toBigUnits(tdl, dec);
+    msg.tokenPerTxLimit = toBigUnits(tpl, dec);
+  } else if (act === "removeTokenLimit") {
+    msg.action = "removeTokenLimit";
+    msg.token = p.token;
+  } else if (act === "pause") {
+    msg.action = "pause";
+  } else if (act === "unpause") {
+    msg.action = "unpause";
   } else {
-    msg = { action: "unpause", wallet: wa };
+    var dl = document.getElementById("e-dl") ? document.getElementById("e-dl").value : p.daily;
+    var pl = document.getElementById("e-pl") ? document.getElementById("e-pl").value : p.pertx;
+    msg.action = "setPolicy";
+    msg.dailyLimit = "" + (parseInt(dl) * 1000000);
+    msg.perTxLimit = "" + (parseInt(pl) * 1000000);
   }
 
-  // Get challenge from server
-  log("requesting challenge...");
+  submitWithPasskey(msg, "e-req", function() {
+    btn.disabled = false;
+    btn.textContent = "Approve";
+  });
+}
+
+// ─── Manual mode ───
+function setTab(t) {
+  manualTab = t;
+  var btns = document.getElementById("tabs").children;
+  for (var i = 0; i < btns.length; i++) btns[i].className = "";
+  if (t === "limits") btns[0].className = "sel";
+  if (t === "tokenLimit") btns[1].className = "sel";
+  if (t === "pause") btns[2].className = "sel";
+  if (t === "unpause") btns[3].className = "sel";
+  document.getElementById("f-limits").className = t === "limits" ? "" : "hide";
+  document.getElementById("f-token").className = t === "tokenLimit" ? "" : "hide";
+  document.getElementById("f-pause").className = t === "pause" ? "" : "hide";
+  document.getElementById("f-unpause").className = t === "unpause" ? "" : "hide";
+}
+
+function doManualApprove() {
+  var btn = document.getElementById("btn-manual");
+  btn.disabled = true;
+  btn.textContent = "Waiting...";
+  hideErr("e-man");
+
+  var msg = { wallet: wa };
+  if (manualTab === "limits") {
+    var dv = parseInt(document.getElementById("m-dl").value) * 1000000;
+    var pv = parseInt(document.getElementById("m-pl").value) * 1000000;
+    if (dv <= 0 || pv <= 0) { showErr("e-man", "Must be > 0"); btn.disabled = false; btn.textContent = "Authenticate & Apply"; return; }
+    msg.action = "setPolicy"; msg.dailyLimit = "" + dv; msg.perTxLimit = "" + pv;
+  } else if (manualTab === "tokenLimit") {
+    var ta = document.getElementById("m-ta").value.trim();
+    var tdl = parseFloat(document.getElementById("m-tdl").value);
+    var tpl = parseFloat(document.getElementById("m-tpl").value);
+    var dec = parseInt(document.getElementById("m-tdc").value) || 18;
+    if (!ta || ta.length !== 42) { showErr("e-man", "Invalid token address"); btn.disabled = false; btn.textContent = "Authenticate & Apply"; return; }
+    if (tdl === 0 && tpl === 0) {
+      msg.action = "removeTokenLimit"; msg.token = ta;
+    } else {
+      if (tdl <= 0 || tpl <= 0) { showErr("e-man", "Both must be > 0 or both 0"); btn.disabled = false; btn.textContent = "Authenticate & Apply"; return; }
+      msg.action = "setTokenLimit"; msg.token = ta;
+      msg.tokenDailyLimit = toBigUnits("" + tdl, dec);
+      msg.tokenPerTxLimit = toBigUnits("" + tpl, dec);
+    }
+  } else if (manualTab === "pause") {
+    msg.action = "pause";
+  } else {
+    msg.action = "unpause";
+  }
+
+  submitWithPasskey(msg, "e-man", function() {
+    btn.disabled = false;
+    btn.textContent = "Authenticate & Apply";
+  });
+}
+
+// ─── Shared passkey flow ───
+function submitWithPasskey(msg, errId, resetFn) {
   fetch(window.location.origin + "/wallet/approve/challenge", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(msg)
-  }).then(function(r) { return r.json(); }).then(function(challenge) {
-    if (challenge.error) throw new Error(challenge.error);
-    log("got challenge, requesting passkey...");
+  }).then(function(r) { return r.json(); }).then(function(ch) {
+    if (ch.error) throw new Error(ch.error);
 
-    // Authenticate with passkey
-    var getOpts = {
+    var opts = {
       publicKey: {
-        challenge: new TextEncoder().encode(challenge.challengeStr),
+        challenge: new TextEncoder().encode(ch.challengeStr),
         userVerification: "required",
         timeout: 60000
       }
     };
-    // Pin to the exact credential that was registered with this wallet
-    if (challenge.credentialId) {
-      log("using stored credential ID");
-      var raw = atob(challenge.credentialId);
+    if (ch.credentialId) {
+      var raw = atob(ch.credentialId);
       var buf = new Uint8Array(raw.length);
       for (var i = 0; i < raw.length; i++) buf[i] = raw.charCodeAt(i);
-      getOpts.publicKey.allowCredentials = [{ type: "public-key", id: buf.buffer }];
+      opts.publicKey.allowCredentials = [{ type: "public-key", id: buf.buffer }];
     }
-    return navigator.credentials.get(getOpts).then(function(assertion) {
-      log("passkey authenticated, sending to backend...");
 
-      var authData = new Uint8Array(assertion.response.authenticatorData);
-      var clientJSON = new Uint8Array(assertion.response.clientDataJSON);
-      var sig = new Uint8Array(assertion.response.signature);
-
+    return navigator.credentials.get(opts).then(function(assertion) {
       return fetch(window.location.origin + "/wallet/approve/execute", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -195,33 +363,76 @@ function doApprove() {
           action: msg.action,
           dailyLimit: msg.dailyLimit,
           perTxLimit: msg.perTxLimit,
-          challengeId: challenge.challengeId,
-          authenticatorData: arrToBase64(authData),
-          clientDataJSON: arrToBase64(clientJSON),
-          signature: arrToBase64(sig)
+          token: msg.token,
+          tokenDailyLimit: msg.tokenDailyLimit,
+          tokenPerTxLimit: msg.tokenPerTxLimit,
+          challengeId: ch.challengeId,
+          authenticatorData: arrToBase64(new Uint8Array(assertion.response.authenticatorData)),
+          clientDataJSON: arrToBase64(new Uint8Array(assertion.response.clientDataJSON)),
+          signature: arrToBase64(new Uint8Array(assertion.response.signature))
         })
       });
     });
   }).then(function(r) { return r.json(); }).then(function(d) {
     if (d.error) throw new Error(d.error);
-    log("success! tx: " + d.txHash);
-    var titles = { setPolicy: "Limits updated", pause: "Wallet paused", unpause: "Wallet unpaused" };
-    document.getElementById("done-title").textContent = titles[msg.action] || "Updated";
-    document.getElementById("s1").className = "hide";
-    document.getElementById("s2").className = "";
+    var titles = {
+      setPolicy: "Limits updated",
+      setTokenLimit: "Token limit set",
+      removeTokenLimit: "Token limit removed",
+      pause: "Wallet paused",
+      unpause: "Wallet unpaused"
+    };
+    document.getElementById("s-request").className = "hide";
+    document.getElementById("s-manual").className = "hide";
+    document.getElementById("s-done").className = "";
+    document.getElementById("done-chk").className = "chk chk-ok";
+    document.getElementById("done-title").textContent = titles[msg.action] || "Done";
+    document.getElementById("done-msg").textContent = "Applied on-chain. Tx: " + (d.txHash || "").slice(0, 14) + "...";
   }).catch(function(e) {
-    log("error: " + e.name + ": " + e.message);
-    err(e.message);
-    btn.disabled = false;
-    btn.textContent = "Authenticate & Apply";
+    showErr(errId, e.message);
+    if (resetFn) resetFn();
   });
 }
 
-function arrToBase64(buf) {
-  var bytes = new Uint8Array(buf);
-  var s = "";
-  for (var i = 0; i < bytes.length; i++) s += String.fromCharCode(bytes[i]);
-  return btoa(s);
+function loadCurrentPolicy() {
+  if (!wa) return;
+  setTimeout(function() {
+    var x = new XMLHttpRequest();
+    x.open("GET", window.location.origin + "/wallet/wallet/" + wa, true);
+    x.timeout = 5000;
+    x.onload = function() {
+      try {
+        var d = JSON.parse(x.responseText);
+        if (d.wallet && d.wallet.policy) {
+          var pol = d.wallet.policy;
+          document.getElementById("cur").innerHTML =
+            "Current: <span style='color:#f54900;font-family:monospace;font-weight:600'>" +
+            (parseInt(pol.dailyLimit)/1e6) + "</span> USD/day, <span style='color:#f54900;font-family:monospace;font-weight:600'>" +
+            (parseInt(pol.perTxLimit)/1e6) + "</span> USD/tx" +
+            (pol.paused ? " — <span style='color:#dc2626'>PAUSED</span>" : "");
+          document.getElementById("m-dl").value = parseInt(pol.dailyLimit)/1e6;
+          document.getElementById("m-pl").value = parseInt(pol.perTxLimit)/1e6;
+        }
+      } catch(e) {}
+    };
+    x.send();
+  }, 100);
+}
+
+function showErr(id, msg) { var e = document.getElementById(id); e.textContent = msg; e.style.display = "block"; }
+function hideErr(id) { var e = document.getElementById(id); if (e) e.style.display = "none"; }
+function arrToBase64(buf) { var s = ""; for (var i = 0; i < buf.length; i++) s += String.fromCharCode(buf[i]); return btoa(s); }
+function toBigUnits(val, dec) {
+  // Convert "1000" with 18 decimals to "1000000000000000000000" without float precision loss
+  var parts = ("" + val).split(".");
+  var whole = parts[0] || "0";
+  var frac = parts[1] || "";
+  if (frac.length > dec) frac = frac.slice(0, dec);
+  while (frac.length < dec) frac += "0";
+  var str = whole + frac;
+  // Remove leading zeros
+  str = str.replace(/^0+/, "") || "0";
+  return str;
 }
 </script>
 </body>

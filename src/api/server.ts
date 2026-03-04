@@ -282,7 +282,7 @@ const approvalChallenges = new Map<string, any>();
 
 // ─── Approval Challenge (step 1: agent or page requests a challenge) ───
 app.post("/approve/challenge", async (req, res) => {
-  const { action, wallet: walletAddr, dailyLimit, perTxLimit } = req.body;
+  const { action, wallet: walletAddr, dailyLimit, perTxLimit, token, tokenDailyLimit, tokenPerTxLimit } = req.body;
   if (!action || !walletAddr) return res.status(400).json({ error: "action and wallet required" });
 
   const challengeId = crypto.randomBytes(32).toString("hex");
@@ -290,6 +290,7 @@ app.post("/approve/challenge", async (req, res) => {
 
   approvalChallenges.set(challengeId, {
     action, wallet: walletAddr, dailyLimit, perTxLimit,
+    token, tokenDailyLimit, tokenPerTxLimit,
     challengeStr, createdAt: Date.now()
   });
   // Expire after 5 minutes
@@ -301,8 +302,8 @@ app.post("/approve/challenge", async (req, res) => {
 
 // ─── Approval Execute (step 2: page sends passkey signature) ───
 app.post("/approve/execute", requireBase, async (req, res) => {
-  const { wallet: walletAddr, action, dailyLimit, perTxLimit, challengeId,
-          authenticatorData, clientDataJSON, signature } = req.body;
+  const { wallet: walletAddr, action, dailyLimit, perTxLimit, token, tokenDailyLimit, tokenPerTxLimit,
+          challengeId, authenticatorData, clientDataJSON, signature } = req.body;
 
   if (!walletAddr || !action || !challengeId || !authenticatorData || !clientDataJSON || !signature) {
     return res.status(400).json({ error: "Missing required fields" });
@@ -356,6 +357,18 @@ app.post("/approve/execute", requireBase, async (req, res) => {
     } else if (action === "unpause") {
       const tx = await wallet.unpauseWithPasskey(authDataBytes, clientJSONStr, r, s);
       txHash = (await tx.wait()).hash;
+    } else if (action === "setTokenLimit") {
+      const tAddr = token || challenge.token;
+      const tDaily = tokenDailyLimit || challenge.tokenDailyLimit;
+      const tPerTx = tokenPerTxLimit || challenge.tokenPerTxLimit;
+      if (!tAddr || !tDaily || !tPerTx) return res.status(400).json({ error: "token, tokenDailyLimit, tokenPerTxLimit required" });
+      const tx = await wallet.setTokenLimitWithPasskey(tAddr, BigInt(tDaily), BigInt(tPerTx), authDataBytes, clientJSONStr, r, s);
+      txHash = (await tx.wait()).hash;
+    } else if (action === "removeTokenLimit") {
+      const tAddr = token || challenge.token;
+      if (!tAddr) return res.status(400).json({ error: "token required" });
+      const tx = await wallet.removeTokenLimitWithPasskey(tAddr, authDataBytes, clientJSONStr, r, s);
+      txHash = (await tx.wait()).hash;
     } else {
       return res.status(400).json({ error: "Unknown action: " + action });
     }
@@ -370,13 +383,20 @@ app.post("/approve/execute", requireBase, async (req, res) => {
 // ─── Agent: Request Limit Increase ───
 // Agent calls this, gets back a URL to send to their human
 app.post("/approve/request", (_req, res) => {
-  const { wallet: walletAddr, dailyLimit, perTxLimit, reason } = _req.body;
+  const { wallet: walletAddr, action, dailyLimit, perTxLimit,
+          token, tokenDailyLimit, tokenPerTxLimit, tokenDecimals,
+          reason } = _req.body;
   if (!walletAddr) return res.status(400).json({ error: "wallet required" });
 
   const host = process.env.BASE_URL || "https://agntos.dev";
   const params = new URLSearchParams({ wallet: walletAddr });
+  if (action) params.set("action", action);
   if (dailyLimit) params.set("daily", dailyLimit);
   if (perTxLimit) params.set("pertx", perTxLimit);
+  if (token) params.set("token", token);
+  if (tokenDailyLimit) params.set("tdl", tokenDailyLimit);
+  if (tokenPerTxLimit) params.set("tpl", tokenPerTxLimit);
+  if (tokenDecimals) params.set("dec", tokenDecimals);
   if (reason) params.set("reason", reason);
 
   const approvalUrl = `${host}/wallet/approve?${params.toString()}`;
