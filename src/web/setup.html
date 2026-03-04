@@ -3,67 +3,82 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>AgentWallet Setup</title>
+<title>AgentWallet — Setup</title>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
   body { font-family: -apple-system, sans-serif; background: #0a0b0f; color: #e4e4e7; min-height: 100vh; display: flex; align-items: center; justify-content: center; }
-  .container { max-width: 480px; width: 100%; padding: 20px; }
-  .card { background: #12141a; border: 1px solid #1e2028; border-radius: 16px; padding: 32px; }
-  h1 { font-size: 24px; font-weight: 700; margin-bottom: 8px; }
-  .sub { color: #71717a; font-size: 14px; margin-bottom: 24px; line-height: 1.5; }
-  .addr { font-family: monospace; font-size: 13px; color: #71717a; background: #0a0b0f; padding: 8px 12px; border-radius: 8px; margin-bottom: 24px; word-break: break-all; }
-  .dots { display: flex; gap: 8px; margin-bottom: 24px; }
-  .dot { width: 32px; height: 4px; border-radius: 2px; background: #1e2028; }
-  .dot.on { background: #f54900; }
-  .dot.ok { background: #3fb950; }
+  .container { max-width: 420px; width: 100%; padding: 20px; }
+  .card { background: #12141a; border: 1px solid #1e2028; border-radius: 16px; padding: 28px; }
+  h1 { font-size: 22px; font-weight: 700; margin-bottom: 6px; }
+  .sub { color: #71717a; font-size: 14px; margin-bottom: 20px; line-height: 1.5; }
+  .addr { font-family: monospace; font-size: 12px; color: #52525b; margin-bottom: 20px; word-break: break-all; }
+  .steps { display: flex; gap: 8px; margin-bottom: 24px; }
+  .step { flex: 1; height: 3px; border-radius: 2px; background: #1e2028; }
+  .step.active { background: #f54900; }
+  .step.done { background: #3fb950; }
   .hide { display: none; }
-  label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 6px; color: #71717a; text-transform: uppercase; letter-spacing: 0.5px; }
-  input { width: 100%; background: #0a0b0f; border: 1px solid #1e2028; border-radius: 8px; padding: 12px; color: #e4e4e7; font-size: 16px; font-family: monospace; outline: none; margin-bottom: 16px; }
+  label { display: block; font-size: 12px; font-weight: 600; margin-bottom: 4px; color: #71717a; text-transform: uppercase; letter-spacing: 0.5px; }
+  input { width: 100%; background: #0a0b0f; border: 1px solid #1e2028; border-radius: 8px; padding: 12px; color: #e4e4e7; font-size: 16px; font-family: monospace; outline: none; margin-bottom: 14px; }
   input:focus { border-color: #f54900; }
-  .hint { font-size: 12px; color: #71717a; margin-top: -12px; margin-bottom: 16px; }
+  .hint { font-size: 11px; color: #52525b; margin-top: -10px; margin-bottom: 14px; }
   .btn { width: 100%; padding: 14px; border: none; border-radius: 10px; font-size: 15px; font-weight: 600; cursor: pointer; }
-  .btn-w { background: white; color: #000; }
-  .btn-o { background: #f54900; color: white; }
-  .err { background: #2d1214; border: 1px solid #5c2124; color: #f87171; padding: 12px; border-radius: 8px; font-size: 13px; margin-bottom: 16px; display: none; }
-  .done { text-align: center; }
-  .chk { width: 48px; height: 48px; margin: 0 auto 16px; background: #3fb950; border-radius: 50%; display: flex; align-items: center; justify-content: center; }
-  pre { white-space: pre-wrap; font-size: 11px; color: #555; margin-top: 16px; max-height: 200px; overflow: auto; }
+  .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+  .btn-primary { background: #f54900; color: white; }
+  .btn-white { background: white; color: #000; }
+  .err { background: #2d1214; border: 1px solid #5c2124; color: #f87171; padding: 10px 12px; border-radius: 8px; font-size: 13px; margin-bottom: 14px; display: none; }
+  .finish { text-align: center; }
+  .finish-icon { width: 48px; height: 48px; margin: 0 auto 16px; background: #3fb950; border-radius: 50%; display: flex; align-items: center; justify-content: center; }
+  .telegram-hint { margin-top: 16px; padding: 12px; background: #0a0b0f; border: 1px solid #1e2028; border-radius: 8px; text-align: center; }
+  .telegram-hint a { color: #f54900; text-decoration: none; font-weight: 600; }
 </style>
 </head>
 <body>
 <div class="container">
   <div class="card">
-    <div class="dots">
-      <div class="dot on" id="d1"></div>
-      <div class="dot" id="d2"></div>
-      <div class="dot" id="d3"></div>
+    <div class="steps">
+      <div class="step active" id="st1"></div>
+      <div class="step" id="st2"></div>
+      <div class="step" id="st3"></div>
     </div>
+
+    <!-- Step 1: Limits -->
     <div id="s1">
       <h1>Set spending limits</h1>
-      <p class="sub">Configure how much your agent can spend. You can change these anytime.</p>
+      <p class="sub">Control how much your agent can spend per day and per transaction.</p>
       <div class="addr" id="wa"></div>
       <div class="err" id="e1"></div>
-      <label>Daily limit (USDC)</label>
+      <label>Daily limit (USD)</label>
       <input type="number" id="dl" value="50" min="1">
-      <p class="hint">Max per day</p>
-      <label>Per-transaction limit (USDC)</label>
+      <p class="hint">Maximum your agent can spend in 24 hours</p>
+      <label>Per-transaction limit (USD)</label>
       <input type="number" id="pl" value="25" min="1">
-      <p class="hint">Max per transaction</p>
-      <button class="btn btn-o" onclick="doLim()">Save &amp; Continue</button>
+      <p class="hint">Maximum per single transaction</p>
+      <button class="btn btn-primary" onclick="saveLimits()">Continue</button>
     </div>
+
+    <!-- Step 2: Passkey -->
     <div id="s2" class="hide">
-      <h1>Register passkey</h1>
-      <p class="sub">Secure your wallet with FaceID, fingerprint, or YubiKey. This becomes your master key.</p>
+      <h1>Register your passkey</h1>
+      <p class="sub">Secure your wallet with FaceID, fingerprint, or a hardware key. This becomes the only way to change limits or withdraw funds.</p>
       <div class="err" id="e2"></div>
-      <button class="btn btn-w" id="regbtn" onclick="doReg()">Register Passkey</button>
-      <pre id="dbg"></pre>
+      <button class="btn btn-white" id="regbtn" onclick="registerPasskey()">Register Passkey</button>
     </div>
+
+    <!-- Step 3: Done -->
     <div id="s3" class="hide">
-      <div class="done">
-        <div class="chk"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg></div>
+      <div class="finish">
+        <div class="finish-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg></div>
         <h1>Wallet secured</h1>
-        <p class="sub">Passkey registered and limits set. Your agent can now transact.</p>
+        <p class="sub">Your passkey is registered and limits are set on-chain. Your agent can now transact within the limits you configured.</p>
         <div class="addr" id="wf"></div>
+      </div>
+    </div>
+
+    <!-- Telegram in-app browser warning -->
+    <div id="tg-warn" class="hide">
+      <div class="telegram-hint">
+        <p class="sub" style="margin-bottom:8px">Passkeys don't work in Telegram's built-in browser.</p>
+        <a id="safari-link" href="#">Open in Safari</a>
       </div>
     </div>
   </div>
@@ -72,33 +87,56 @@
 var qs = new URLSearchParams(window.location.search);
 var tk = qs.get("token");
 var wa = qs.get("wallet");
-var dbg = document.getElementById("dbg");
 document.getElementById("wa").textContent = wa || "Unknown";
 document.getElementById("wf").textContent = wa || "";
 
-function log(m) { dbg.textContent += m + "\n"; }
-function err(n, m) { var e = document.getElementById("e"+n); e.textContent = m; e.style.display = "block"; }
-function step(n) {
-  document.getElementById("s1").className = n===1?"":"hide";
-  document.getElementById("s2").className = n===2?"":"hide";
-  document.getElementById("s3").className = n===3?"":"hide";
-  document.getElementById("d1").className = "dot"+(n===1?" on":"")+(n>1?" ok":"");
-  document.getElementById("d2").className = "dot"+(n===2?" on":"")+(n>2?" ok":"");
-  document.getElementById("d3").className = "dot"+(n===3?" on":"");
+// Detect Telegram in-app browser
+var isTG = /Telegram/i.test(navigator.userAgent);
+if (isTG) {
+  document.getElementById("tg-warn").className = "";
+  document.getElementById("safari-link").href = window.location.href;
 }
 
-function doReg() {
+function showErr(n, msg) { var e = document.getElementById("e" + n); e.textContent = msg; e.style.display = "block"; }
+function hideErr(n) { document.getElementById("e" + n).style.display = "none"; }
+
+function goStep(n) {
+  document.getElementById("s1").className = n === 1 ? "" : "hide";
+  document.getElementById("s2").className = n === 2 ? "" : "hide";
+  document.getElementById("s3").className = n === 3 ? "" : "hide";
+  document.getElementById("st1").className = "step" + (n === 1 ? " active" : " done");
+  document.getElementById("st2").className = "step" + (n === 2 ? " active" : "") + (n > 2 ? " done" : "");
+  document.getElementById("st3").className = "step" + (n === 3 ? " active done" : "");
+}
+
+function saveLimits() {
+  hideErr(1);
+  var dv = parseInt(document.getElementById("dl").value) * 1000000;
+  var pv = parseInt(document.getElementById("pl").value) * 1000000;
+  if (dv <= 0 || pv <= 0) { showErr(1, "Limits must be greater than 0"); return; }
+  if (pv > dv) { showErr(1, "Per-transaction limit can't exceed daily limit"); return; }
+
+  fetch(window.location.origin + "/wallet/setup/set-limits", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ token: tk, wallet: wa, dailyLimit: "" + dv, perTxLimit: "" + pv })
+  }).then(function(r) { return r.json(); }).then(function(d) {
+    if (d.error) throw new Error(d.error);
+    goStep(2);
+  }).catch(function(e) { showErr(1, e.message); });
+}
+
+function registerPasskey() {
+  hideErr(2);
   var btn = document.getElementById("regbtn");
   btn.disabled = true;
-  btn.textContent = "Waiting...";
-  log("starting webauthn...");
+  btn.textContent = "Waiting for passkey...";
 
   var ch = new Uint8Array(32);
   window.crypto.getRandomValues(ch);
   var uid = new Uint8Array(16);
   window.crypto.getRandomValues(uid);
 
-  log("calling create...");
   navigator.credentials.create({
     publicKey: {
       challenge: ch,
@@ -107,33 +145,29 @@ function doReg() {
       pubKeyCredParams: [{ type: "public-key", alg: -7 }]
     }
   }).then(function(cred) {
-    log("got credential, parsing key...");
     var att = new Uint8Array(cred.response.attestationObject);
     var xy = extractKey(att);
-    log("x=" + xy.x.substring(0, 12) + "...");
-    log("y=" + xy.y.substring(0, 12) + "...");
-    log("posting to backend...");
     var rawId = new Uint8Array(cred.rawId);
     var b64 = "";
     for (var i = 0; i < rawId.length; i++) b64 += String.fromCharCode(rawId[i]);
     b64 = btoa(b64);
+
     return fetch(window.location.origin + "/wallet/setup/register-passkey", {
       method: "POST",
-      headers: {"Content-Type": "application/json"},
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ token: tk, wallet: wa, pubKeyX: xy.x, pubKeyY: xy.y, credentialId: b64 })
     });
   }).then(function(r) { return r.json(); }).then(function(d) {
     if (d.error) throw new Error(d.error);
-    log("passkey registered on-chain!");
-    step(3);
+    goStep(3);
   }).catch(function(e) {
-    log("error: " + e.name + ": " + e.message);
-    err(2, e.name + ": " + e.message);
+    showErr(2, e.message);
     btn.disabled = false;
     btn.textContent = "Register Passkey";
   });
 }
 
+// ─── CBOR / COSE key extraction ───
 function extractKey(att) {
   var d = cbor(att, 0);
   var ad = d.v.authData;
@@ -142,52 +176,37 @@ function extractKey(att) {
   var np = ad[p] & 0x1f; p++;
   var keys = {};
   for (var i = 0; i < np; i++) {
-    var km = ad[p]>>5, kv = ad[p]&0x1f; p++;
-    var k = kv; if (km===1) k = -(kv+1);
-    if (kv >= 24) { k = ad[p]; if (km===1) k = -(ad[p]+1); p++; }
-    var vm = ad[p]>>5, vv = ad[p]&0x1f; p++;
+    var km = ad[p] >> 5, kv = ad[p] & 0x1f; p++;
+    var k = kv;
+    if (km === 1) k = -(kv + 1);
+    if (kv >= 24) { k = ad[p]; if (km === 1) k = -(ad[p] + 1); p++; }
+    var vm = ad[p] >> 5, vv = ad[p] & 0x1f; p++;
     var ln = vv;
-    if (vv===24) { ln = ad[p]; p++; }
-    if (vv===25) { ln = (ad[p]<<8)|ad[p+1]; p+=2; }
-    if (vm===2) { keys[k] = ad.slice(p, p+ln); p+=ln; }
-    else if (vm===0) { keys[k] = ln; }
-    else if (vm===1) { keys[k] = -(ln+1); }
-    else if (vm===3) { p+=ln; }
+    if (vv === 24) { ln = ad[p]; p++; }
+    if (vv === 25) { ln = (ad[p] << 8) | ad[p + 1]; p += 2; }
+    if (vm === 2) { keys[k] = ad.slice(p, p + ln); p += ln; }
+    else if (vm === 0) { keys[k] = ln; }
+    else if (vm === 1) { keys[k] = -(ln + 1); }
+    else if (vm === 3) { p += ln; }
   }
-  var x = keys[-2], y = keys[-3];
-  return { x: hex(x), y: hex(y) };
+  return { x: toHex(keys[-2]), y: toHex(keys[-3]) };
 }
 
 function cbor(d, p) {
-  var mj = d[p]>>5, mn = d[p]&0x1f; p++;
+  var mj = d[p] >> 5, mn = d[p] & 0x1f; p++;
   var v = mn;
-  if (mn===24) { v=d[p]; p++; }
-  if (mn===25) { v=(d[p]<<8)|d[p+1]; p+=2; }
-  if (mj===2) return {v: d.slice(p,p+v), p: p+v};
-  if (mj===3) { var t=""; for(var i=0;i<v;i++) t+=String.fromCharCode(d[p+i]); return {v:t, p:p+v}; }
-  if (mj===5) { var m={}; for(var i=0;i<v;i++){var a=cbor(d,p);p=a.p;var b=cbor(d,p);p=b.p;m[a.v]=b.v;} return {v:m,p:p}; }
-  return {v:v, p:p};
+  if (mn === 24) { v = d[p]; p++; }
+  if (mn === 25) { v = (d[p] << 8) | d[p + 1]; p += 2; }
+  if (mj === 2) return { v: d.slice(p, p + v), p: p + v };
+  if (mj === 3) { var t = ""; for (var i = 0; i < v; i++) t += String.fromCharCode(d[p + i]); return { v: t, p: p + v }; }
+  if (mj === 5) { var m = {}; for (var i = 0; i < v; i++) { var a = cbor(d, p); p = a.p; var b = cbor(d, p); p = b.p; m[a.v] = b.v; } return { v: m, p: p }; }
+  return { v: v, p: p };
 }
 
-function hex(a) {
-  var h="0x";
-  for(var i=0;i<a.length;i++) h+=("0"+a[i].toString(16)).slice(-2);
+function toHex(a) {
+  var h = "0x";
+  for (var i = 0; i < a.length; i++) h += ("0" + a[i].toString(16)).slice(-2);
   return h;
-}
-
-function doLim() {
-  var dv = parseInt(document.getElementById("dl").value)*1000000;
-  var pv = parseInt(document.getElementById("pl").value)*1000000;
-  if (dv<=0||pv<=0) { err(1,"Must be > 0"); return; }
-  if (pv>dv) { err(1,"Per-tx cannot exceed daily"); return; }
-  fetch(window.location.origin + "/wallet/setup/set-limits", {
-    method: "POST",
-    headers: {"Content-Type":"application/json"},
-    body: JSON.stringify({token:tk, wallet:wa, dailyLimit:""+dv, perTxLimit:""+pv})
-  }).then(function(r){return r.json();}).then(function(d){
-    if(d.error) throw new Error(d.error);
-    step(2);
-  }).catch(function(e){ err(1, e.message); });
 }
 </script>
 </body>
