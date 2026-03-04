@@ -13,7 +13,7 @@ app.use(express.json());
 const setupTokens = new Map<string, { wallet: string; agent: string; createdAt: number }>();
 
 // Wallet credential IDs: walletAddress → credentialId (base64) — persisted to disk
-const CREDS_FILE = join(dirname(fileURLToPath(import.meta.url)), "../../data/credentials.json");
+const CREDS_FILE = join(dirname(fileURLToPath(import.meta.url)), "../../../data/credentials.json");
 
 function loadCredentials(): Map<string, string> {
   try {

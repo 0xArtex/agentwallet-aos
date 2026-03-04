@@ -49,7 +49,8 @@ export class BaseWalletClient {
     const tx = await this.factory.createUnmanagedWallet(agentAddress);
     const receipt = await tx.wait();
     const addr = this.extractWalletAddress(receipt) || agentAddress;
-    await this.configureOracle(addr);
+    // Skip oracle for unmanaged — agent is owner and can set it themselves
+    // Admin can't call setOracle since owner = agent, not admin
     return addr;
   }
 
