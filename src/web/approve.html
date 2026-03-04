@@ -131,6 +131,12 @@
   </div>
 </div>
 <script>
+// Detect Telegram/WebView — auto-open in system browser
+var isTG = /Telegram/i.test(navigator.userAgent) || (window.TelegramWebviewProxy) || (window.Telegram && window.Telegram.WebApp);
+if (isTG && window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.openLink) {
+  window.Telegram.WebApp.openLink(window.location.href);
+}
+
 var qs = new URLSearchParams(window.location.search);
 var wa = qs.get("wallet") || "";
 var p = {

@@ -90,11 +90,22 @@ var wa = qs.get("wallet");
 document.getElementById("wa").textContent = wa || "Unknown";
 document.getElementById("wf").textContent = wa || "";
 
-// Detect Telegram in-app browser
-var isTG = /Telegram/i.test(navigator.userAgent);
+// Detect Telegram/WebView — auto-open in system browser
+var isTG = /Telegram/i.test(navigator.userAgent) || (window.TelegramWebviewProxy) || (window.Telegram && window.Telegram.WebApp);
 if (isTG) {
+  // Try Telegram Mini App API first (opens system browser)
+  if (window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.openLink) {
+    window.Telegram.WebApp.openLink(window.location.href);
+  } else {
+    // Fallback: show manual link
+    document.getElementById("tg-warn").className = "";
+    document.getElementById("safari-link").href = window.location.href;
+  }
+} else if (!window.PublicKeyCredential) {
+  // Browser doesn't support WebAuthn at all
   document.getElementById("tg-warn").className = "";
   document.getElementById("safari-link").href = window.location.href;
+  document.querySelector("#tg-warn .sub").textContent = "This browser doesn't support passkeys. Please open in Safari or Chrome.";
 }
 
 function showErr(n, msg) { var e = document.getElementById("e" + n); e.textContent = msg; e.style.display = "block"; }
