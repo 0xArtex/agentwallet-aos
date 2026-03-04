@@ -9,16 +9,17 @@
     "test:contracts": "cd ../contracts/base && forge test -v"
   },
   "dependencies": {
-    "ethers": "^6.13",
-    "@solana/web3.js": "^1.98",
     "@solana/spl-token": "^0.4",
-    "express": "^4.21",
+    "@solana/web3.js": "^1.98",
     "better-sqlite3": "^11.7",
-    "bs58": "^6.0"
+    "bs58": "^6.0",
+    "ethers": "^6.13",
+    "express": "^4.21"
   },
   "devDependencies": {
-    "@types/express": "^5.0",
     "@types/better-sqlite3": "^7.6",
+    "@types/express": "^5.0",
+    "tsx": "^4.21.0",
     "typescript": "^5.7"
   }
 }
