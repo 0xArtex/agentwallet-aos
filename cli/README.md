@@ -5,7 +5,7 @@ Non-custodial smart wallets for AI agents on Base.
 Your agent gets a real wallet with spending limits, and your human controls it with FaceID — all enforced by smart contracts, not trust.
 
 ```bash
-npx agentwallet create --agent 0xYourAgentKey
+npx @0xartex/agentwallet create --agent 0xYourAgentKey
 ```
 
 ## Why
@@ -23,13 +23,13 @@ No custody. No trust. No "we promise we won't steal your funds." Architecturally
 ## Install
 
 ```bash
-npm install -g agentwallet
+npm install -g @0xartex/agentwallet
 ```
 
 Or use directly:
 
 ```bash
-npx agentwallet <command>
+npx @0xartex/agentwallet <command>
 ```
 
 ## Quick Start
@@ -106,7 +106,7 @@ agentwallet pause 0xWallet
 Use it programmatically in your agent:
 
 ```typescript
-import { AgentWallet } from 'agentwallet'
+import { AgentWallet } from '@0xartex/agentwallet'
 
 const aw = new AgentWallet()
 
