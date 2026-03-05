@@ -1,10 +1,45 @@
 {
   "name": "agentwallet",
-  "version": "0.1.0",
-  "description": "Non-custodial smart wallets for AI agents",
+  "version": "1.0.0",
+  "description": "Non-custodial smart wallets for AI agents. Create wallets, check balances, request limit changes — all from the command line.",
   "type": "module",
-  "bin": { "agentwallet": "./dist/index.js" },
-  "scripts": { "build": "tsc", "dev": "tsx src/index.ts" },
-  "dependencies": { "ethers": "^6.16.0" },
-  "devDependencies": { "typescript": "^5.4.0", "tsx": "^4.7.0", "@types/node": "^22.0.0" }
+  "main": "./dist/sdk.js",
+  "types": "./dist/sdk.d.ts",
+  "bin": {
+    "agentwallet": "./dist/cli.js"
+  },
+  "exports": {
+    ".": {
+      "import": "./dist/sdk.js",
+      "types": "./dist/sdk.d.ts"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": [
+    "ai", "agent", "wallet", "smart-wallet", "base", "ethereum",
+    "non-custodial", "passkey", "webauthn", "spending-limits",
+    "ai-agent", "autonomous-agent", "crypto", "defi"
+  ],
+  "author": "AgentOS <hello@agntos.dev>",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/0xArtex/agentwallet-aos.git",
+    "directory": "cli"
+  },
+  "homepage": "https://github.com/0xArtex/agentwallet-aos#readme",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.7"
+  }
 }

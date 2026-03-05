@@ -10,3 +10,6 @@ target/
 .anchor/
 contracts/solana/target/
 data/
+
+cli/node_modules/
+cli/dist/

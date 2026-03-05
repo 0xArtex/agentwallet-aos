@@ -3,9 +3,7 @@
   "version": "0.1.0",
   "description": "Non-custodial smart wallets for AI agents",
   "type": "module",
-  "bin": {
-    "agentwallet": "./dist/cli/index.js"
-  },
+
   "scripts": {
     "build": "tsc && cp -r base/abi dist/base/abi && cp -r web dist/web",
     "start": "node dist/api/server.js",
