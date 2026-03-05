@@ -3,16 +3,72 @@
 Non-custodial smart wallets with on-chain policy enforcement. Your agent gets a real wallet with spending limits, human oversight via passkey (FaceID/YubiKey), and Chainlink oracle-based USD tracking — all enforced by smart contracts, not trust.
 
 **Network:** Base (EVM)
-**Base URL:** `https://agntos.dev/wallet`
+**npm:** `@0xartex/agentwallet`
+**API:** `https://agntos.dev/wallet`
 
-## Quick Start
-
-### 1. Create a managed wallet (recommended)
+## CLI (recommended)
 
 ```bash
+npx @0xartex/agentwallet create --agent 0xYOUR_AGENT_ADDRESS
+npx @0xartex/agentwallet create --agent 0xYOUR_AGENT_ADDRESS --unmanaged
+npx @0xartex/agentwallet status 0xWALLET_ADDRESS
+npx @0xartex/agentwallet limits 0xWALLET --daily 200 --pertx 100 --reason "Need more"
+npx @0xartex/agentwallet token-limit 0xWALLET --token 0xTOKEN --token-daily 1000 --token-pertx 300
+npx @0xartex/agentwallet rm-token 0xWALLET --token 0xTOKEN
+npx @0xartex/agentwallet pause 0xWALLET
+npx @0xartex/agentwallet unpause 0xWALLET
+npx @0xartex/agentwallet stats
+```
+
+All commands support `--json` for machine-readable output.
+
+## SDK
+
+```typescript
+import { AgentWallet } from '@0xartex/agentwallet'
+
+const aw = new AgentWallet()
+
+// Create a wallet (returns setup URL for human)
+const { wallet, setupUrl } = await aw.create('0xAgentAddress')
+
+// Create autonomous wallet (no human)
+const { wallet: w2 } = await aw.createUnmanaged('0xAgentAddress')
+
+// Check wallet
+const { wallet: info } = await aw.status('0xWalletAddress')
+
+// Request limit increase (returns URL for human to approve)
+const { approvalUrl } = await aw.requestLimitIncrease('0xWallet', {
+  dailyLimit: 200, perTxLimit: 100, reason: 'Trading'
+})
+
+// Token limit
+await aw.requestTokenLimit('0xWallet', {
+  token: '0xToken', dailyLimit: 1000, perTxLimit: 300
+})
+
+// Emergency
+await aw.requestPause('0xWallet', 'Security concern')
+await aw.requestUnpause('0xWallet')
+```
+
+## REST API
+
+**Base URL:** `https://agntos.dev/wallet`
+
+### Create wallet
+
+```bash
+# Managed (human registers passkey later)
 curl -X POST https://agntos.dev/wallet/wallet \
   -H "Content-Type: application/json" \
   -d '{"agent": "0xYOUR_AGENT_ADDRESS"}'
+
+# Unmanaged (agent is its own owner)
+curl -X POST https://agntos.dev/wallet/wallet \
+  -H "Content-Type: application/json" \
+  -d '{"agent": "0xYOUR_AGENT_ADDRESS", "mode": "unmanaged"}'
 ```
 
 Response:
@@ -33,26 +89,46 @@ Response:
 }
 ```
 
-Send `setupUrl` to your human. They open it, set limits, register their passkey (FaceID/fingerprint/YubiKey). Done.
-
-- Default limits: $50/day, $25/tx
+- Default limits: $50/day, $25/tx (values in USDC units, 6 decimals)
 - Gas auto-funded on creation (~$0.07, covers ~140 txs on Base)
+- Send `setupUrl` to human → they set limits + register passkey (FaceID/YubiKey)
 
-### 2. Create an unmanaged wallet (no human)
-
-```bash
-curl -X POST https://agntos.dev/wallet/wallet \
-  -H "Content-Type: application/json" \
-  -d '{"agent": "0xYOUR_AGENT_ADDRESS", "mode": "unmanaged"}'
-```
-
-Agent is both owner and agent. Can change its own limits. No human in the loop.
-
-### 3. Check wallet status
+### Check wallet
 
 ```bash
 curl https://agntos.dev/wallet/wallet/0xWALLET_ADDRESS
 ```
+
+### Request limit change
+
+```bash
+curl -X POST https://agntos.dev/wallet/approve/request \
+  -H "Content-Type: application/json" \
+  -d '{"wallet":"0xWALLET","action":"limits","dailyLimit":"200","perTxLimit":"100","reason":"Need higher limits"}'
+```
+
+Returns `{ "approvalUrl": "https://..." }`. Send to human → they authenticate with passkey → limits updated on-chain.
+
+### Available actions
+
+| Action | Body params | Description |
+|--------|-------------|-------------|
+| `limits` | `dailyLimit`, `perTxLimit` | Change USD daily/per-tx limits |
+| `tokenLimit` | `token`, `tokenDailyLimit`, `tokenPerTxLimit`, `tokenDecimals` | Set per-token ERC-20 limit |
+| `removeTokenLimit` | `token` | Remove a token limit |
+| `pause` | | Emergency pause — all agent txs revert |
+| `unpause` | | Resume agent operations |
+
+### All endpoints
+
+| Method | Path | Description |
+|--------|------|-------------|
+| POST | `/wallet` | Create wallet |
+| GET | `/wallet/:address` | Wallet info, policy, balances |
+| GET | `/stats` | Total wallets deployed |
+| POST | `/approve/request` | Generate approval URL for human |
+| GET | `/setup` | Human passkey registration page |
+| GET | `/approve` | Human wallet management page |
 
 ## Limit Tracking
 
@@ -64,7 +140,7 @@ curl https://agntos.dev/wallet/wallet/0xWALLET_ADDRESS
 
 ETH + USDC share an **aggregated USD daily limit**. Spending $30 in ETH and $15 in USDC = $45 against a $50 daily limit.
 
-## Transactions
+## On-Chain Transactions
 
 Agents call the smart contract directly using their private key:
 
@@ -73,80 +149,14 @@ Agents call the smart contract directly using their private key:
 
 All transactions execute instantly or revert. No approval queues.
 
-## Human Approval Flow
-
-Agents can request changes from their human via pre-filled URLs:
-
-### Request limit increase
-
-```bash
-curl -X POST https://agntos.dev/wallet/approve/request \
-  -H "Content-Type: application/json" \
-  -d '{
-    "wallet": "0xWALLET",
-    "action": "limits",
-    "dailyLimit": "200",
-    "perTxLimit": "100",
-    "reason": "Need higher limits for trading"
-  }'
-```
-
-Returns a URL. Agent sends it to human → human opens it → reviews the request → authenticates with passkey → changes applied on-chain.
-
-### Request token limit
-
-```bash
-curl -X POST https://agntos.dev/wallet/approve/request \
-  -H "Content-Type: application/json" \
-  -d '{
-    "wallet": "0xWALLET",
-    "action": "tokenLimit",
-    "token": "0xTOKEN_ADDRESS",
-    "tokenDailyLimit": "1000",
-    "tokenPerTxLimit": "300",
-    "tokenDecimals": "18",
-    "reason": "Cap exposure on this token"
-  }'
-```
-
-### Other actions
-
-| Action | Description |
-|--------|-------------|
-| `limits` | Change USD daily/per-tx limits |
-| `tokenLimit` | Set per-token ERC-20 limit |
-| `removeTokenLimit` | Remove a token limit (back to unlimited) |
-| `pause` | Emergency pause — all agent txs revert |
-| `unpause` | Resume agent operations |
-
-Human can also open `https://agntos.dev/wallet/approve?wallet=0x...` directly to manage the wallet manually (no pre-fill).
-
-## Endpoints
-
-| Method | Path | Description |
-|--------|------|-------------|
-| POST | `/wallet` | Create wallet (managed or unmanaged) |
-| GET | `/wallet/:address` | Wallet info, policy, balances |
-| GET | `/stats` | Total wallets deployed |
-| GET | `/setup` | Human passkey registration page |
-| GET | `/approve` | Human approval/management page |
-| POST | `/approve/request` | Generate pre-filled approval URL |
-| POST | `/approve/challenge` | Get passkey challenge |
-| POST | `/approve/execute` | Submit passkey-signed action |
-| POST | `/setup/set-limits` | Set limits during setup |
-| POST | `/setup/register-passkey` | Register passkey during setup |
-
-All paths are relative to `https://agntos.dev/wallet`.
-
 ## Security Model
 
 - **Non-custodial**: agent's private key never leaves the agent's machine
 - **On-chain enforcement**: limits are in the smart contract, not the API
-- **Passkey ownership**: human's private key lives in device secure enclave (FaceID/YubiKey), verified on-chain via RIP-7212 P-256 precompile
-- **Backend is a relay**: passes passkey signatures to chain, cannot forge them
-- **Chainlink oracle**: ETH price from decentralized oracle network, 1-hour staleness check
-- **No backdoors**: even the provider cannot move funds or override limits
-- **Emergency controls**: owner can pause, withdraw, revoke, blacklist at any time
+- **Passkey ownership**: human's key in device secure enclave, verified on-chain via RIP-7212
+- **Backend is a relay**: cannot forge signatures or override limits
+- **Chainlink oracle**: decentralized price feed, 1-hour staleness check
+- **Emergency controls**: owner can pause, withdraw, blacklist at any time
 
 ## Contract Addresses
 

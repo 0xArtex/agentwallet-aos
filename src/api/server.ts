@@ -94,11 +94,15 @@ app.post("/wallet", requireBase, async (req, res) => {
 
 // ─── Get Wallet ───
 app.get("/wallet/:address", requireBase, async (req, res) => {
+  const addr = req.params.address;
+  if (!/^0x[0-9a-fA-F]{40}$/.test(addr)) {
+    return res.status(400).json({ error: "Invalid wallet address" });
+  }
   try {
-    const info = await baseClient!.getWallet(req.params.address);
+    const info = await baseClient!.getWallet(addr);
     res.json({ wallet: info });
   } catch (err: any) {
-    res.status(404).json({ error: err.message });
+    res.status(404).json({ error: "Wallet not found or not an AgentWallet" });
   }
 });
 
