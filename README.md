@@ -250,7 +250,7 @@ The backend is a **convenience layer** — all security-critical logic is on-cha
 ## Project Structure
 
 ```
-cli/                          ← npm package (agentwallet)
+cli/                          ← npm package (@0xartex/agentwallet)
   cli.ts                      — CLI with colored output
   sdk.ts                      — TypeScript SDK
 contracts/

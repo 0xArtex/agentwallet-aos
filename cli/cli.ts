@@ -129,7 +129,8 @@ ${c.bold}Environment${c.reset}
   ${c.yellow}AGENTWALLET_URL${c.reset}    API endpoint (default: https://agntos.dev/wallet)
   ${c.yellow}AGENTWALLET_AGENT${c.reset}  Default agent address
 
-${c.dim}Docs: https://github.com/0xArtex/agentwallet${c.reset}
+${c.dim}Docs: https://github.com/0xArtex/agentwallet-aos${c.reset}
+${c.dim}npm:  https://www.npmjs.com/package/@0xartex/agentwallet${c.reset}
 `)
 }
 

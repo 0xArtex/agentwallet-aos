@@ -1,4 +1,4 @@
-# agentwallet
+# @0xartex/agentwallet
 
 Non-custodial smart wallets for AI agents on Base.
 

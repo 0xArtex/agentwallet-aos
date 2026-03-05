@@ -3,7 +3,7 @@
  *
  * @example
  * ```ts
- * import { AgentWallet } from 'agentwallet'
+ * import { AgentWallet } from '@0xartex/agentwallet'
  *
  * const aw = new AgentWallet()
  * const { wallet, setupUrl } = await aw.create('0xAgentAddress')
