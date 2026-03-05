@@ -34,6 +34,17 @@ npx @0xartex/agentwallet <command>
 
 ## Quick Start
 
+### What is `--agent`?
+
+The `--agent` address is your agent's **EVM public address** — the key your agent holds and uses to sign transactions. The wallet contract only allows this address to execute transactions (within the spending limits).
+
+```javascript
+import { Wallet } from 'ethers'
+const agent = Wallet.createRandom()
+console.log(agent.address)    // use this as --agent
+console.log(agent.privateKey) // agent signs txs with this — save securely
+```
+
 ### 1. Create a wallet
 
 ```bash

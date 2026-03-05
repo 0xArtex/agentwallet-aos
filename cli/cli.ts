@@ -95,7 +95,7 @@ ${c.bold}Commands${c.reset}
   ${c.cyan}stats${c.reset}               Total wallets deployed
 
 ${c.bold}Options${c.reset}
-  ${c.yellow}--agent${c.reset} ${c.dim}<addr>${c.reset}      Agent address (or AGENTWALLET_AGENT env)
+  ${c.yellow}--agent${c.reset} ${c.dim}<addr>${c.reset}      Agent's EVM public address (the key that signs transactions)
   ${c.yellow}--daily${c.reset} ${c.dim}<usd>${c.reset}       Daily limit in USD
   ${c.yellow}--pertx${c.reset} ${c.dim}<usd>${c.reset}       Per-transaction limit in USD
   ${c.yellow}--token${c.reset} ${c.dim}<addr>${c.reset}      Token contract address
@@ -111,10 +111,11 @@ ${c.bold}Options${c.reset}
 
 ${c.bold}Examples${c.reset}
   ${c.dim}# Create a managed wallet (human sets up passkey)${c.reset}
-  ${c.green}$${c.reset} agentwallet create --agent 0x1234...
+  ${c.dim}# --agent is your EVM public address (the key your agent uses to sign txs)${c.reset}
+  ${c.green}$${c.reset} agentwallet create --agent 0xYourAgentPublicAddress
 
   ${c.dim}# Create an autonomous wallet (no human)${c.reset}
-  ${c.green}$${c.reset} agentwallet create --agent 0x1234... --unmanaged
+  ${c.green}$${c.reset} agentwallet create --agent 0xYourAgentPublicAddress --unmanaged
 
   ${c.dim}# Check your wallet${c.reset}
   ${c.green}$${c.reset} agentwallet status 0xWallet...
@@ -138,7 +139,7 @@ ${c.dim}npm:  https://www.npmjs.com/package/@0xartex/agentwallet${c.reset}
 
 async function cmdCreate(aw: AgentWallet, flags: Record<string, string | boolean>) {
   const agent = (flags.agent as string) || process.env.AGENTWALLET_AGENT || ''
-  if (!agent) error('--agent <address> is required (or set AGENTWALLET_AGENT)')
+  if (!agent) error('--agent <address> is required. This is your agent\'s EVM public address — the key it uses to sign transactions. (Or set AGENTWALLET_AGENT env var)')
 
   const data = flags.unmanaged
     ? await aw.createUnmanaged(agent!)

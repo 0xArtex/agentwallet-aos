@@ -63,14 +63,27 @@ npx @0xartex/agentwallet <command>
 
 ## Quick Start
 
+### What is `--agent`?
+
+The `--agent` address is your agent's **EVM public address** — the key your agent holds and uses to sign transactions. If your agent already has an Ethereum/Base keypair, use that public address. If not, generate one:
+
+```javascript
+import { Wallet } from 'ethers'
+const agent = Wallet.createRandom()
+console.log(agent.address)    // this is your --agent address
+console.log(agent.privateKey) // save this securely — your agent signs txs with it
+```
+
+The wallet contract only allows this address to execute transactions (within the spending limits).
+
 ### 1. Create a wallet
 
 ```bash
 # Managed (human sets up passkey)
-agentwallet create --agent 0xYourAgentPublicKey
+agentwallet create --agent 0xYourAgentPublicAddress
 
 # Autonomous (no human in the loop)
-agentwallet create --agent 0xYourAgentPublicKey --unmanaged
+agentwallet create --agent 0xYourAgentPublicAddress --unmanaged
 ```
 
 A managed wallet returns a **setup URL**. Send it to your human — they open it, set limits, register their passkey. Done.

@@ -6,6 +6,18 @@ Non-custodial smart wallets with on-chain policy enforcement. Your agent gets a 
 **npm:** `@0xartex/agentwallet`
 **API:** `https://agntos.dev/wallet`
 
+## Agent Address
+
+The `--agent` / `"agent"` parameter is your agent's **EVM public address** — the keypair your agent uses to sign on-chain transactions. This is the only address authorized to execute transactions from the wallet (within limits).
+
+If you don't have one yet, generate a keypair:
+```javascript
+import { Wallet } from 'ethers'
+const agent = Wallet.createRandom()
+// agent.address  → use as --agent / "agent" param
+// agent.privateKey → your agent signs execute() calls with this
+```
+
 ## CLI (recommended)
 
 ```bash
