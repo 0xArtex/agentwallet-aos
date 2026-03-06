@@ -3,22 +3,19 @@
 Non-custodial, gas-sponsored smart wallets with on-chain spending limits, Chainlink oracle-based USD tracking, and passkey-based human control — all on Base. Every wallet gets free gas on creation so your agent can transact immediately.
 
 **npm:** `@0xartex/agentwallet`
-**API:** `https://agntos.dev/wallet`
 **Chain:** Base (EVM, chain ID 8453)
 
 ## End-to-End: Create a Wallet and Start Transacting
 
 ### 1. Generate an agent keypair (if you don't have one)
 
-Your agent needs an EVM keypair. The public address goes in `--agent`. The private key is what you sign transactions with.
+Your agent needs an EVM keypair. The public address identifies your agent on-chain. The private key signs transactions.
 
 ```bash
 npx @0xartex/agentwallet keygen
-# or with ethers.js:
-# const agent = ethers.Wallet.createRandom()
-# agent.address → your --agent address
-# agent.privateKey → save securely, signs txs
 ```
+
+> Already have an EVM keypair (from ethers.js, viem, etc.)? Skip this — use your existing public address.
 
 ### 2. Create a wallet
 
@@ -88,7 +85,7 @@ npx @0xartex/agentwallet limits 0xWALLET --daily 200 --pertx 100 --reason "Need 
 
 Returns a URL → send to human → they authenticate with passkey → limits updated on-chain.
 
-## CLI Reference
+## All Commands
 
 ```bash
 npx @0xartex/agentwallet keygen                        # generate agent keypair
@@ -104,40 +101,6 @@ npx @0xartex/agentwallet stats
 ```
 
 All commands support `--json` for machine-readable output.
-
-## SDK
-
-```typescript
-import { AgentWallet } from '@0xartex/agentwallet'
-
-const aw = new AgentWallet()
-const { wallet, setupUrl } = await aw.create('0xAgentAddress')
-const { wallet: info } = await aw.status(wallet.address)
-const { approvalUrl } = await aw.requestLimitIncrease(wallet.address, {
-  dailyLimit: 200, perTxLimit: 100, reason: 'Trading'
-})
-```
-
-## REST API
-
-**Base URL:** `https://agntos.dev/wallet`
-
-| Method | Path | Description |
-|--------|------|-------------|
-| POST | `/wallet` | Create wallet (`{"agent":"0x..."}` or `{"agent":"0x...","mode":"unmanaged"}`) |
-| GET | `/wallet/:address` | Wallet info, policy, balances |
-| GET | `/stats` | Total wallets deployed |
-| POST | `/approve/request` | Generate approval URL for human |
-
-### Approval actions
-
-| Action | Body params | Description |
-|--------|-------------|-------------|
-| `limits` | `dailyLimit`, `perTxLimit` | Change USD limits |
-| `tokenLimit` | `token`, `tokenDailyLimit`, `tokenPerTxLimit`, `tokenDecimals` | Per-token limit |
-| `removeTokenLimit` | `token` | Remove token limit |
-| `pause` | | Emergency pause |
-| `unpause` | | Resume |
 
 ## Limit Tracking
 
@@ -163,7 +126,7 @@ ETH + USDC share an **aggregated USD daily limit**.
 - **Non-custodial**: agent's private key never leaves agent's machine
 - **On-chain enforcement**: limits in smart contract, not the API
 - **Passkey ownership**: human's key in device secure enclave, verified on-chain via RIP-7212
-- **Backend is a relay**: cannot forge signatures or override limits
+- **Gas-sponsored**: free gas on creation, agent transacts immediately
 - **Chainlink oracle**: decentralized price feed, 1-hour staleness check
 - **Emergency controls**: owner can pause, withdraw, blacklist at any time
 - **Direct contract access**: agent can bypass the API entirely and call contracts directly

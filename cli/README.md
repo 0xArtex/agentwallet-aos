@@ -20,41 +20,31 @@ AI agents need to spend money. But giving an agent an unlimited wallet is terrif
 
 No custody. No trust. Architecturally impossible to steal funds.
 
-## Install
-
-```bash
-npm install -g @0xartex/agentwallet
-```
-
-Or use directly:
-
-```bash
-npx @0xartex/agentwallet <command>
-```
-
 ## Quick Start: From Zero to Transacting
 
 ### 1. Generate a keypair
 
 ```bash
-agentwallet keygen
+npx @0xartex/agentwallet keygen
 ```
 
 This gives you an **address** (your agent's identity) and a **private key** (signs transactions). Save the private key securely.
 
-> Already have an EVM keypair? Skip this step — use your existing public address.
+> Already have an EVM keypair? Skip this — use your existing public address.
 
 ### 2. Create a wallet
 
 ```bash
 # Managed — human controls limits via FaceID/YubiKey
-agentwallet create --agent 0xYourAgentAddress
+npx @0xartex/agentwallet create --agent 0xYourAgentAddress
 
 # Unmanaged — fully autonomous, no human needed
-agentwallet create --agent 0xYourAgentAddress --unmanaged
+npx @0xartex/agentwallet create --agent 0xYourAgentAddress --unmanaged
 ```
 
 Managed wallets return a **setup URL**. Send it to your human — one-time setup.
+
+Every wallet gets **free gas** (~140 transactions on Base).
 
 ### 3. Fund it
 
@@ -84,9 +74,6 @@ await wallet.executeERC20(
   '0xRecipient',
   5_000_000n // 5 USDC (6 decimals)
 )
-
-// Call any contract (swaps, mints, etc.)
-await wallet.execute('0xRouter', parseEther('0.01'), '0xCalldata...')
 ```
 
 Transactions exceeding limits **revert instantly**. No queues, no waiting.
@@ -94,67 +81,33 @@ Transactions exceeding limits **revert instantly**. No queues, no waiting.
 ### 5. Check status
 
 ```bash
-agentwallet status 0xYourWallet
-```
-
-```
-  Wallet
-  ────────────────
-  Address         0x01Ab...0f03
-  Owner           Passkey (FaceID/YubiKey)
-  Spending        ███░░░░░░░░░░░░░░░░░░░░░░░░░░░ 3%
-  Spent today     $1.53 / $50
-  Remaining       $48.47
-  Per-tx limit    $25
-  Gas balance     0.001178 ETH
+npx @0xartex/agentwallet status 0xYourWallet
 ```
 
 ### 6. Need higher limits?
 
 ```bash
-agentwallet limits 0xWallet --daily 200 --pertx 100 --reason "Trading needs more"
+npx @0xartex/agentwallet limits 0xWallet --daily 200 --pertx 100
 ```
 
 Returns a URL → send to human → they approve with passkey → done.
 
-## Commands
+## All Commands
 
-| Command | Description |
-|---------|-------------|
-| `keygen` | Generate a new agent keypair |
-| `create` | Create a wallet |
-| `status` | Check wallet info & balances |
-| `limits` | Request a limit increase |
-| `token-limit` | Set a per-token spending limit |
-| `rm-token` | Remove a token limit |
-| `pause` | Request emergency pause |
-| `unpause` | Request unpause |
-| `stats` | Total wallets deployed |
-
-All commands support `--json` for machine-readable output.
-
-## SDK
-
-```typescript
-import { AgentWallet } from '@0xartex/agentwallet'
-
-const aw = new AgentWallet()
-
-const { wallet, setupUrl } = await aw.create('0xAgentAddress')
-const { wallet: info } = await aw.status(wallet.address)
-const { approvalUrl } = await aw.requestLimitIncrease(wallet.address, {
-  dailyLimit: 200,
-  perTxLimit: 100,
-  reason: 'Trading bot needs more headroom'
-})
+```bash
+keygen                        # generate agent keypair
+create --agent 0x...          # managed wallet
+create --agent 0x... --unmanaged  # autonomous wallet
+status 0xWALLET               # wallet info + balances
+limits 0xWALLET --daily N --pertx N  # request limit increase
+token-limit 0xWALLET --token 0x... --token-daily N --token-pertx N
+rm-token 0xWALLET --token 0x...  # remove token limit
+pause 0xWALLET                # emergency pause
+unpause 0xWALLET              # resume
+stats                         # total wallets deployed
 ```
 
-## Environment Variables
-
-| Variable | Description |
-|----------|-------------|
-| `AGENTWALLET_URL` | API endpoint (default: `https://agntos.dev/wallet`) |
-| `AGENTWALLET_AGENT` | Default agent address for `create` |
+All commands support `--json` for machine-readable output.
 
 ## Contracts (Base Mainnet)
 
@@ -163,7 +116,7 @@ const { approvalUrl } = await aw.requestLimitIncrease(wallet.address, {
 | Factory | [`0x77c2a63BB08b090b46eb612235604dEB8150A4A1`](https://basescan.org/address/0x77c2a63BB08b090b46eb612235604dEB8150A4A1) |
 | Implementation | [`0xEF85c0F9D468632Ff97a36235FC73d70cc19BAbA`](https://basescan.org/address/0xEF85c0F9D468632Ff97a36235FC73d70cc19BAbA) |
 
-Source & self-hosted setup: [github.com/0xArtex/agentwallet-aos](https://github.com/0xArtex/agentwallet-aos)
+Source: [github.com/0xArtex/agentwallet-aos](https://github.com/0xArtex/agentwallet-aos)
 
 ## License
 
