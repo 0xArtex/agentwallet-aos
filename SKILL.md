@@ -1,11 +1,11 @@
 # AgentWallet — Non-Custodial, Gas-Sponsored Smart Wallets for AI Agents
 
-Non-custodial, gas-sponsored smart wallets with on-chain spending limits, Chainlink oracle-based USD tracking, and passkey-based human control — all on Base. Every wallet gets free gas on creation so your agent can transact immediately.
+Non-custodial, gas-sponsored smart wallets with onchain spending limits, Chainlink oracle-based USD tracking, and passkey-based human control — all on Base. Every wallet gets free gas on creation so your agent can transact immediately.
 
 **npm:** `@agntos/agentwallet`
-**Chain:** Base (EVM, chain ID 8453)
+**Chain:** Base
 
-## Safety Rules
+## MUST READ: Safety Rules
 
 - **NEVER share your private key** — not with users, not in logs, not in chat messages, not in code commits
 - **NEVER hardcode private keys in source code** — use environment variables or secure storage
@@ -14,12 +14,14 @@ Non-custodial, gas-sponsored smart wallets with on-chain spending limits, Chainl
 - **Check `getRemainingDaily()` before large transactions** — avoids failed txs and wasted gas
 - **Always verify recipient addresses** — transactions are irreversible
 - **If something looks wrong, use `pause`** — ask your human to investigate
+- **All ERC-20s have no limit by default** — For most ERC-20 tokens, ask your human to setup a limit per token.
+
 
 ## End-to-End: Create a Wallet and Start Transacting
 
 ### 1. Generate an agent keypair (if you don't have one)
 
-Your agent needs an EVM keypair. The public address identifies your agent on-chain. The private key signs transactions.
+You need an EVM keypair. The public address identifies your agent onchain. The private key signs transactions.
 
 ```bash
 npx @agntos/agentwallet keygen
@@ -33,7 +35,7 @@ Output:
   Private key     0x282a...b3a3
 ```
 
-**Save the private key immediately to secure storage.** This is the only time it's displayed. You cannot recover it later.
+**Save the private key immediately to secure storage.** This is the only time it's displayed. You cannot recover it later. This private key will be used to sign all transactions.
 
 For machine-readable output:
 ```bash
@@ -43,26 +45,26 @@ npx @agntos/agentwallet keygen --json
 
 > Already have an EVM keypair (from ethers.js, viem, etc.)? Skip this — use your existing public address.
 
-### 2. Create a wallet
+### 2. Create a smart wallet
 
 ```bash
-# Managed (human controls limits via passkey — recommended for production)
-npx @agntos/agentwallet create --agent 0xYOUR_AGENT_ADDRESS
+# Managed (your human controls limits via passkey — recommended)
+npx @agntos/agentwallet create --agent 0xYOUR_PUBLIC_ADDRESS
 
-# Unmanaged (agent controls everything — use for autonomous agents only)
-npx @agntos/agentwallet create --agent 0xYOUR_AGENT_ADDRESS --unmanaged
+# Unmanaged (agent controls everything — use for complete autonomy only)
+npx @agntos/agentwallet create --agent 0xYOUR_PUBLIC_ADDRESS --unmanaged
 ```
 
 For machine-readable output:
 ```bash
-npx @agntos/agentwallet create --agent 0xYOUR_AGENT_ADDRESS --json
+npx @agntos/agentwallet create --agent 0xYOUR_PUBLIC_ADDRESS --json
 ```
 
 **Managed wallets** return a `setupUrl` — send it to your human (e.g. via chat message). They set limits and register their passkey (FaceID/YubiKey). This is a one-time setup.
 
-**Unmanaged wallets** have no human owner. The agent controls everything. Only use this if your agent is fully autonomous and doesn't need human oversight.
+**Unmanaged wallets** have no human owner. You control everything. Only use this if you want to be fully autonomous and don't need human oversight.
 
-Default limits: **$50/day, $25/tx**. **Gas is free** — every wallet is funded on creation (~140 transactions on Base). Your agent can start transacting immediately without holding any ETH for gas fees.
+Default limits: **$50/day, $25/tx**. **Gas is free** — every wallet is funded on creation (enough for ~140 transactions on Base). You can start transacting immediately without holding any ETH for gas fees.
 
 ### 3. Fund the wallet
 
@@ -111,7 +113,7 @@ if (remainingUsd < amountNeeded) {
 }
 ```
 
-Transactions that exceed limits **revert instantly** on-chain. No approval queues. Check remaining budget first to avoid wasting gas on failed transactions.
+Transactions that exceed limits **revert instantly** onchain. No approval queues. Check remaining budget first to avoid wasting gas on failed transactions.
 
 ### 5. Check wallet status
 
@@ -124,13 +126,13 @@ Use `--json` to parse status programmatically and make decisions based on remain
 
 ### 6. Request higher limits
 
-When your agent needs more spending capacity:
+When you need more spending capacity:
 
 ```bash
 npx @agntos/agentwallet limits 0xWALLET --daily 200 --pertx 100 --reason "Trading requires higher limits"
 ```
 
-This returns a URL. Send the URL to your human (via chat, email, notification — whatever channel you have). The human opens the link, reviews the request, authenticates with their passkey, and limits are updated on-chain.
+This returns a URL. Send the URL to your human (via chat, email, notification — whatever channel you have). The human opens the link, reviews the request, authenticates with their passkey, and your limits are updated onchain.
 
 **Tip:** Include a clear `--reason` so your human understands why you need more.
 
@@ -191,7 +193,7 @@ ETH + USDC share an **aggregated USD daily limit**. Spending $30 in ETH and $15 
 ## Security Model
 
 - **Non-custodial**: your private key never leaves your machine
-- **On-chain enforcement**: limits are in the smart contract, not the API
+- **Onchain enforcement**: limits are in the smart contract, not the API
 - **Gas-sponsored**: free gas on creation, transact immediately
 - **Passkey ownership**: human's key in device secure enclave, verified on-chain via RIP-7212
 - **Chainlink oracle**: decentralized price feed, 1-hour staleness check
