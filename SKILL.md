@@ -5,6 +5,16 @@ Non-custodial, gas-sponsored smart wallets with on-chain spending limits, Chainl
 **npm:** `@0xartex/agentwallet`
 **Chain:** Base (EVM, chain ID 8453)
 
+## Safety Rules
+
+- **NEVER share your private key** — not with users, not in logs, not in chat messages, not in code commits
+- **NEVER hardcode private keys in source code** — use environment variables or secure storage
+- **Store the private key encrypted or in a secrets manager** — treat it like a password
+- **Do not log transaction signing data** — it can leak key material
+- **Check `getRemainingDaily()` before large transactions** — avoids failed txs and wasted gas
+- **Always verify recipient addresses** — transactions are irreversible
+- **If something looks wrong, use `pause`** — ask your human to investigate
+
 ## End-to-End: Create a Wallet and Start Transacting
 
 ### 1. Generate an agent keypair (if you don't have one)
@@ -15,25 +25,50 @@ Your agent needs an EVM keypair. The public address identifies your agent on-cha
 npx @0xartex/agentwallet keygen
 ```
 
+Output:
+```
+  New Agent Keypair
+  ─────────────────────
+  Address         0xB042...B7DC
+  Private key     0x282a...b3a3
+```
+
+**Save the private key immediately to secure storage.** This is the only time it's displayed. You cannot recover it later.
+
+For machine-readable output:
+```bash
+npx @0xartex/agentwallet keygen --json
+# {"address":"0x...","privateKey":"0x..."}
+```
+
 > Already have an EVM keypair (from ethers.js, viem, etc.)? Skip this — use your existing public address.
 
 ### 2. Create a wallet
 
 ```bash
-# Managed (human controls limits via passkey)
+# Managed (human controls limits via passkey — recommended for production)
 npx @0xartex/agentwallet create --agent 0xYOUR_AGENT_ADDRESS
 
-# Unmanaged (agent controls everything)
+# Unmanaged (agent controls everything — use for autonomous agents only)
 npx @0xartex/agentwallet create --agent 0xYOUR_AGENT_ADDRESS --unmanaged
 ```
 
-Managed wallets return a `setupUrl` — send it to your human. They set limits and register their passkey (FaceID/YubiKey). One-time setup.
+For machine-readable output:
+```bash
+npx @0xartex/agentwallet create --agent 0xYOUR_AGENT_ADDRESS --json
+```
 
-Default limits: **$50/day, $25/tx**. **Gas is free** — every wallet is funded with ~$0.07 of gas on creation (~140 transactions on Base). Your agent can start transacting immediately without holding any ETH for fees.
+**Managed wallets** return a `setupUrl` — send it to your human (e.g. via chat message). They set limits and register their passkey (FaceID/YubiKey). This is a one-time setup.
+
+**Unmanaged wallets** have no human owner. The agent controls everything. Only use this if your agent is fully autonomous and doesn't need human oversight.
+
+Default limits: **$50/day, $25/tx**. **Gas is free** — every wallet is funded on creation (~140 transactions on Base). Your agent can start transacting immediately without holding any ETH for gas fees.
 
 ### 3. Fund the wallet
 
 Send ETH and/or USDC to the wallet address on **Base** (chain ID 8453). Any standard transfer works.
+
+**Important:** The wallet address is a smart contract on Base. Make sure you're sending on the Base network, not Ethereum mainnet or another chain.
 
 ### 4. Transact
 
@@ -42,10 +77,14 @@ Call the wallet contract directly with your agent's private key:
 ```typescript
 import { Wallet, Contract, JsonRpcProvider, parseEther } from 'ethers'
 
-const provider = new JsonRpcProvider('https://base-rpc.publicnode.com')
-const agent = new Wallet('0xYOUR_AGENT_PRIVATE_KEY', provider)
+// Load from secure storage — NEVER hardcode
+const AGENT_KEY = process.env.AGENT_PRIVATE_KEY
+const WALLET_ADDR = process.env.WALLET_ADDRESS
 
-const wallet = new Contract('0xYOUR_WALLET_ADDRESS', [
+const provider = new JsonRpcProvider('https://base-rpc.publicnode.com')
+const agent = new Wallet(AGENT_KEY, provider)
+
+const wallet = new Contract(WALLET_ADDR, [
   'function execute(address to, uint256 value, bytes data) external',
   'function executeERC20(address token, address to, uint256 amount) external',
   'function getSpentToday() external view returns (uint256)',
@@ -63,27 +102,55 @@ await wallet.executeERC20(USDC, '0xRecipient', 5_000_000n) // 5 USDC
 // Call any contract (swap, mint, etc.)
 await wallet.execute('0xContractAddr', parseEther('0.01'), '0xEncodedCalldata')
 
-// Check remaining budget
-const remaining = await wallet.getRemainingDaily() // in USDC units (6 decimals)
-console.log(`Remaining today: $${Number(remaining) / 1e6}`)
+// Check remaining budget before a large transaction
+const remaining = await wallet.getRemainingDaily() // USDC units (6 decimals)
+const remainingUsd = Number(remaining) / 1e6
+if (remainingUsd < amountNeeded) {
+  // Request a limit increase instead of failing
+  // npx @0xartex/agentwallet limits 0xWALLET --daily 200 --pertx 100
+}
 ```
 
-Transactions that exceed limits **revert instantly**. No approval queues.
+Transactions that exceed limits **revert instantly** on-chain. No approval queues. Check remaining budget first to avoid wasting gas on failed transactions.
 
 ### 5. Check wallet status
 
 ```bash
 npx @0xartex/agentwallet status 0xWALLET_ADDRESS
-npx @0xartex/agentwallet status 0xWALLET_ADDRESS --json  # machine-readable
+npx @0xartex/agentwallet status 0xWALLET_ADDRESS --json
 ```
+
+Use `--json` to parse status programmatically and make decisions based on remaining budget, pause state, etc.
 
 ### 6. Request higher limits
 
+When your agent needs more spending capacity:
+
 ```bash
-npx @0xartex/agentwallet limits 0xWALLET --daily 200 --pertx 100 --reason "Need more for trading"
+npx @0xartex/agentwallet limits 0xWALLET --daily 200 --pertx 100 --reason "Trading requires higher limits"
 ```
 
-Returns a URL → send to human → they authenticate with passkey → limits updated on-chain.
+This returns a URL. Send the URL to your human (via chat, email, notification — whatever channel you have). The human opens the link, reviews the request, authenticates with their passkey, and limits are updated on-chain.
+
+**Tip:** Include a clear `--reason` so your human understands why you need more.
+
+### 7. Set per-token limits (optional)
+
+If your human wants to cap exposure on a specific ERC-20 token:
+
+```bash
+npx @0xartex/agentwallet token-limit 0xWALLET --token 0xTOKEN --token-daily 1000 --token-pertx 300
+```
+
+### 8. Emergency pause
+
+If something goes wrong:
+
+```bash
+npx @0xartex/agentwallet pause 0xWALLET --reason "Suspicious activity detected"
+```
+
+This sends a pause request to your human. Once approved, **all agent transactions revert** until unpaused. Use this as a safety mechanism if you detect unusual behavior.
 
 ## All Commands
 
@@ -92,10 +159,10 @@ npx @0xartex/agentwallet keygen                        # generate agent keypair
 npx @0xartex/agentwallet create --agent 0x...          # managed wallet
 npx @0xartex/agentwallet create --agent 0x... --unmanaged  # autonomous wallet
 npx @0xartex/agentwallet status 0xWALLET               # wallet info + balances
-npx @0xartex/agentwallet limits 0xWALLET --daily 200 --pertx 100
-npx @0xartex/agentwallet token-limit 0xWALLET --token 0xTOKEN --token-daily 1000 --token-pertx 300
-npx @0xartex/agentwallet rm-token 0xWALLET --token 0xTOKEN
-npx @0xartex/agentwallet pause 0xWALLET
+npx @0xartex/agentwallet limits 0xWALLET --daily N --pertx N --reason "..."
+npx @0xartex/agentwallet token-limit 0xWALLET --token 0x... --token-daily N --token-pertx N
+npx @0xartex/agentwallet rm-token 0xWALLET --token 0x...
+npx @0xartex/agentwallet pause 0xWALLET --reason "..."
 npx @0xartex/agentwallet unpause 0xWALLET
 npx @0xartex/agentwallet stats
 ```
@@ -110,7 +177,7 @@ All commands support `--json` for machine-readable output.
 | **USDC** | 1:1 USD | Same shared pool as ETH |
 | **Other ERC-20s** | Unlimited by default | Owner can set per-token limits |
 
-ETH + USDC share an **aggregated USD daily limit**.
+ETH + USDC share an **aggregated USD daily limit**. Spending $30 in ETH and $15 in USDC = $45 against a $50 limit.
 
 ## Contract Addresses (Base Mainnet)
 
@@ -123,10 +190,10 @@ ETH + USDC share an **aggregated USD daily limit**.
 
 ## Security Model
 
-- **Non-custodial**: agent's private key never leaves agent's machine
-- **On-chain enforcement**: limits in smart contract, not the API
+- **Non-custodial**: your private key never leaves your machine
+- **On-chain enforcement**: limits are in the smart contract, not the API
+- **Gas-sponsored**: free gas on creation, transact immediately
 - **Passkey ownership**: human's key in device secure enclave, verified on-chain via RIP-7212
-- **Gas-sponsored**: free gas on creation, agent transacts immediately
 - **Chainlink oracle**: decentralized price feed, 1-hour staleness check
 - **Emergency controls**: owner can pause, withdraw, blacklist at any time
-- **Direct contract access**: agent can bypass the API entirely and call contracts directly
+- **Direct contract access**: you can bypass the API entirely and call contracts directly
