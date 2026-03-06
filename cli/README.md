@@ -5,7 +5,7 @@ Non-custodial smart wallets for AI agents on Base.
 Your agent gets a real wallet with spending limits, and your human controls it with FaceID — all enforced by smart contracts, not trust.
 
 ```bash
-npx @0xartex/agentwallet create --agent 0xYourAgentKey
+npx @0xartex/agentwallet create --agent 0xYourAgentAddress
 ```
 
 ## Why
@@ -18,7 +18,7 @@ AI agents need to spend money. But giving an agent an unlimited wallet is terrif
 - Limits are enforced **on-chain** — the API literally cannot override them
 - Agent's private key never leaves the agent's machine
 
-No custody. No trust. No "we promise we won't steal your funds." Architecturally impossible.
+No custody. No trust. Architecturally impossible to steal funds.
 
 ## Install
 
@@ -32,32 +32,66 @@ Or use directly:
 npx @0xartex/agentwallet <command>
 ```
 
-## Quick Start
+## Quick Start: From Zero to Transacting
 
-### What is `--agent`?
-
-The `--agent` address is your agent's **EVM public address** — the key your agent holds and uses to sign transactions. The wallet contract only allows this address to execute transactions (within the spending limits).
-
-```javascript
-import { Wallet } from 'ethers'
-const agent = Wallet.createRandom()
-console.log(agent.address)    // use this as --agent
-console.log(agent.privateKey) // agent signs txs with this — save securely
-```
-
-### 1. Create a wallet
+### 1. Generate a keypair
 
 ```bash
-# Managed (human sets up passkey)
-agentwallet create --agent 0xYourAgentPublicKey
-
-# Autonomous (no human in the loop)
-agentwallet create --agent 0xYourAgentPublicKey --unmanaged
+agentwallet keygen
 ```
 
-A managed wallet returns a **setup URL**. Send it to your human — they open it, set limits, register their passkey. Done.
+This gives you an **address** (your agent's identity) and a **private key** (signs transactions). Save the private key securely.
 
-### 2. Check your wallet
+> Already have an EVM keypair? Skip this step — use your existing public address.
+
+### 2. Create a wallet
+
+```bash
+# Managed — human controls limits via FaceID/YubiKey
+agentwallet create --agent 0xYourAgentAddress
+
+# Unmanaged — fully autonomous, no human needed
+agentwallet create --agent 0xYourAgentAddress --unmanaged
+```
+
+Managed wallets return a **setup URL**. Send it to your human — one-time setup.
+
+### 3. Fund it
+
+Send ETH and/or USDC to the wallet address on **Base** (chain ID 8453).
+
+### 4. Transact
+
+Your agent calls the smart contract directly:
+
+```typescript
+import { Wallet, Contract, JsonRpcProvider, parseEther } from 'ethers'
+
+const provider = new JsonRpcProvider('https://base-rpc.publicnode.com')
+const agent = new Wallet('0xYOUR_PRIVATE_KEY', provider)
+
+const wallet = new Contract('0xYOUR_WALLET', [
+  'function execute(address to, uint256 value, bytes data) external',
+  'function executeERC20(address token, address to, uint256 amount) external',
+], agent)
+
+// Send ETH
+await wallet.execute('0xRecipient', parseEther('0.001'), '0x')
+
+// Send USDC
+await wallet.executeERC20(
+  '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913', // USDC on Base
+  '0xRecipient',
+  5_000_000n // 5 USDC (6 decimals)
+)
+
+// Call any contract (swaps, mints, etc.)
+await wallet.execute('0xRouter', parseEther('0.01'), '0xCalldata...')
+```
+
+Transactions exceeding limits **revert instantly**. No queues, no waiting.
+
+### 5. Check status
 
 ```bash
 agentwallet status 0xYourWallet
@@ -68,10 +102,6 @@ agentwallet status 0xYourWallet
   ────────────────
   Address         0x01Ab...0f03
   Owner           Passkey (FaceID/YubiKey)
-  Agent           0x826f...14eF
-  Chain           base
-  Paused          No
-
   Spending        ███░░░░░░░░░░░░░░░░░░░░░░░░░░░ 3%
   Spent today     $1.53 / $50
   Remaining       $48.47
@@ -79,78 +109,44 @@ agentwallet status 0xYourWallet
   Gas balance     0.001178 ETH
 ```
 
-### 3. Need higher limits?
+### 6. Need higher limits?
 
 ```bash
-agentwallet limits 0xWallet --daily 200 --pertx 100 --reason "Trading requires higher limits"
+agentwallet limits 0xWallet --daily 200 --pertx 100 --reason "Trading needs more"
 ```
 
-Returns a URL. Send it to your human → they review → authenticate with passkey → limits updated on-chain.
-
-### 4. Cap exposure on a token
-
-```bash
-agentwallet token-limit 0xWallet --token 0xToken --token-daily 1000 --token-pertx 300
-```
-
-### 5. Emergency pause
-
-```bash
-agentwallet pause 0xWallet
-```
+Returns a URL → send to human → they approve with passkey → done.
 
 ## Commands
 
-| Command | Alias | Description |
-|---------|-------|-------------|
-| `create` | `new` | Create a wallet |
-| `status` | `info`, `get` | Check wallet info & balances |
-| `limits` | `limit` | Request a limit increase |
-| `token-limit` | | Set a per-token spending limit |
-| `rm-token` | | Remove a token limit |
-| `pause` | | Request emergency pause |
-| `unpause` | `resume` | Request unpause |
-| `stats` | | Total wallets deployed |
+| Command | Description |
+|---------|-------------|
+| `keygen` | Generate a new agent keypair |
+| `create` | Create a wallet |
+| `status` | Check wallet info & balances |
+| `limits` | Request a limit increase |
+| `token-limit` | Set a per-token spending limit |
+| `rm-token` | Remove a token limit |
+| `pause` | Request emergency pause |
+| `unpause` | Request unpause |
+| `stats` | Total wallets deployed |
+
+All commands support `--json` for machine-readable output.
 
 ## SDK
-
-Use it programmatically in your agent:
 
 ```typescript
 import { AgentWallet } from '@0xartex/agentwallet'
 
 const aw = new AgentWallet()
 
-// Create a wallet
-const { wallet, setupUrl } = await aw.create('0xYourAgentKey')
-console.log(wallet.address)
-console.log(setupUrl) // send to human
-
-// Check status
+const { wallet, setupUrl } = await aw.create('0xAgentAddress')
 const { wallet: info } = await aw.status(wallet.address)
-console.log(`Remaining: $${Number(info.remainingDaily) / 1e6}`)
-
-// Need higher limits?
 const { approvalUrl } = await aw.requestLimitIncrease(wallet.address, {
   dailyLimit: 200,
   perTxLimit: 100,
   reason: 'Trading bot needs more headroom'
 })
-// Send approvalUrl to your human
-```
-
-### Available methods
-
-```typescript
-aw.create(agent)                      // managed wallet
-aw.createUnmanaged(agent)             // autonomous wallet
-aw.status(wallet)                     // wallet info
-aw.stats()                            // total wallets
-aw.requestLimitIncrease(wallet, opts) // ask human for higher limits
-aw.requestTokenLimit(wallet, opts)    // set per-token limit
-aw.requestRemoveTokenLimit(wallet, opts) // remove token limit
-aw.requestPause(wallet, reason?)      // emergency pause
-aw.requestUnpause(wallet, reason?)    // resume operations
 ```
 
 ## Environment Variables
@@ -160,61 +156,14 @@ aw.requestUnpause(wallet, reason?)    // resume operations
 | `AGENTWALLET_URL` | API endpoint (default: `https://agntos.dev/wallet`) |
 | `AGENTWALLET_AGENT` | Default agent address for `create` |
 
-## How It Works
-
-```
-Agent creates wallet → Human registers passkey → Agent transacts within limits
-                              ↓
-                     Human can: raise/lower limits,
-                     pause, set token limits,
-                     blacklist addresses, withdraw
-```
-
-**On-chain enforcement:**
-- Smart contract checks every transaction against daily + per-tx limits
-- ETH and USDC share an aggregated USD limit (via Chainlink oracle)
-- ERC-20 tokens can have independent per-token limits
-- All transactions execute instantly or revert — no approval queues
-
-**Security model:**
-- Agent key → can only spend within limits
-- Passkey (FaceID/YubiKey) → controls limits, pause, withdraw
-- API server → convenience relay only, cannot forge signatures
-- If the API goes down, agent can interact with contracts directly
-
-## Contracts
-
-Deployed on **Base** (Ethereum L2):
+## Contracts (Base Mainnet)
 
 | Contract | Address |
 |----------|---------|
 | Factory | [`0x77c2a63BB08b090b46eb612235604dEB8150A4A1`](https://basescan.org/address/0x77c2a63BB08b090b46eb612235604dEB8150A4A1) |
 | Implementation | [`0xEF85c0F9D468632Ff97a36235FC73d70cc19BAbA`](https://basescan.org/address/0xEF85c0F9D468632Ff97a36235FC73d70cc19BAbA) |
 
-Source: [github.com/0xArtex/agentwallet-aos](https://github.com/0xArtex/agentwallet-aos)
-
-## Self-hosted
-
-Don't want to use our hosted API? Run your own:
-
-```bash
-git clone https://github.com/0xArtex/agentwallet-aos
-cd agentwallet-aos/src
-npm install && npm run build
-
-ADMIN_PRIVATE_KEY=0x... \
-FACTORY_ADDRESS=0x77c2a63BB08b090b46eb612235604dEB8150A4A1 \
-BASE_RPC=https://base-rpc.publicnode.com \
-ETH_USD_ORACLE=0x71041dddad3595F9CEd3DcCFBe3D1F4b0a16Bb70 \
-USDC_ADDRESS=0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913 \
-node dist/api/server.js
-```
-
-Then point the CLI at it:
-
-```bash
-agentwallet create --agent 0x... --url http://localhost:3002
-```
+Source & self-hosted setup: [github.com/0xArtex/agentwallet-aos](https://github.com/0xArtex/agentwallet-aos)
 
 ## License
 
