@@ -17,7 +17,7 @@ const c = {
   orange: '\x1b[38;5;208m',
 }
 
-const VERSION = '1.0.0'
+const VERSION = '1.0.1'
 
 // ─── Parse args ───
 function parse(argv: string[]) {
