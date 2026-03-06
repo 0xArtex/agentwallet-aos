@@ -1,6 +1,6 @@
-# AgentWallet — Non-Custodial Smart Wallets for AI Agents
+# AgentWallet — Non-Custodial, Gas-Sponsored Smart Wallets for AI Agents
 
-Non-custodial smart wallets with on-chain policy enforcement, Chainlink oracle-based USD tracking, and passkey-based human control — all on Base.
+Non-custodial, gas-sponsored smart wallets with on-chain spending limits, Chainlink oracle-based USD tracking, and passkey-based human control — all on Base. Every wallet gets free gas on creation so your agent can transact immediately.
 
 **npm:** `@0xartex/agentwallet`
 **API:** `https://agntos.dev/wallet`
@@ -32,7 +32,7 @@ npx @0xartex/agentwallet create --agent 0xYOUR_AGENT_ADDRESS --unmanaged
 
 Managed wallets return a `setupUrl` — send it to your human. They set limits and register their passkey (FaceID/YubiKey). One-time setup.
 
-Default limits: **$50/day, $25/tx**. Gas pre-funded (~$0.07, ~140 txs).
+Default limits: **$50/day, $25/tx**. **Gas is free** — every wallet is funded with ~$0.07 of gas on creation (~140 transactions on Base). Your agent can start transacting immediately without holding any ETH for fees.
 
 ### 3. Fund the wallet
 

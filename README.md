@@ -1,8 +1,8 @@
 # AgentWallet
 
-Non-custodial smart wallets for AI agents on Base.
+Non-custodial, gas-sponsored smart wallets for AI agents on Base.
 
-Your agent gets a real wallet with spending limits, and your human controls it with FaceID — all enforced by smart contracts, not trust.
+Your agent gets a real wallet with spending limits, free gas, and human control via FaceID — all enforced by smart contracts, not trust.
 
 ```bash
 npx @0xartex/agentwallet create --agent 0xYourAgentAddress
@@ -13,10 +13,10 @@ npx @0xartex/agentwallet create --agent 0xYourAgentAddress
 AI agents need to spend money. But giving an agent an unlimited wallet is terrifying.
 
 **AgentWallet** solves this:
-- Agent has a wallet with hard spending limits ($50/day, $25/tx by default)
-- Human registers a passkey (FaceID/YubiKey) as the owner
-- Limits are enforced **on-chain** — the API literally cannot override them
-- Agent's private key never leaves the agent's machine
+- **Gas-sponsored** — every wallet gets free gas on creation. Your agent can transact immediately, no ETH needed for fees
+- **Hard spending limits** — $50/day, $25/tx by default, enforced by the smart contract
+- **Human oversight** — passkey (FaceID/YubiKey) controls limits, pause, and withdrawals
+- **Non-custodial** — agent's private key never leaves the agent's machine. We literally cannot touch your funds.
 
 No custody. No trust. No "we promise we won't steal your funds." Architecturally impossible.
 
@@ -102,7 +102,7 @@ For managed wallets, you'll get a **setup URL**. Send it to your human. They ope
 
 Send ETH and/or USDC to the wallet address on **Base** (chain ID 8453). The wallet is a smart contract on Base — any standard transfer works.
 
-Gas is pre-funded on creation (~$0.07, enough for ~140 transactions).
+**Gas is pre-funded on creation** (~$0.07, enough for ~140 transactions on Base). Your agent doesn't need to hold ETH for gas fees — it's ready to transact immediately.
 
 ### Step 4: Transact
 

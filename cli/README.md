@@ -1,8 +1,8 @@
 # @0xartex/agentwallet
 
-Non-custodial smart wallets for AI agents on Base.
+Non-custodial, gas-sponsored smart wallets for AI agents on Base.
 
-Your agent gets a real wallet with spending limits, and your human controls it with FaceID — all enforced by smart contracts, not trust.
+Your agent gets a real wallet with free gas, spending limits, and human control via FaceID — all enforced by smart contracts, not trust.
 
 ```bash
 npx @0xartex/agentwallet create --agent 0xYourAgentAddress
@@ -13,10 +13,10 @@ npx @0xartex/agentwallet create --agent 0xYourAgentAddress
 AI agents need to spend money. But giving an agent an unlimited wallet is terrifying.
 
 **AgentWallet** solves this:
-- Agent has a wallet with hard spending limits ($50/day, $25/tx by default)
-- Human registers a passkey (FaceID/YubiKey) as the owner
-- Limits are enforced **on-chain** — the API literally cannot override them
-- Agent's private key never leaves the agent's machine
+- **Gas-sponsored** — free gas on creation, your agent transacts immediately
+- **Hard spending limits** — $50/day, $25/tx by default, enforced on-chain
+- **Human oversight** — passkey (FaceID/YubiKey) controls limits and withdrawals
+- **Non-custodial** — agent's private key never leaves agent's machine
 
 No custody. No trust. Architecturally impossible to steal funds.
 

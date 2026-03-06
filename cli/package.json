@@ -1,7 +1,7 @@
 {
   "name": "@0xartex/agentwallet",
   "version": "1.0.0",
-  "description": "Non-custodial smart wallets for AI agents. Create wallets, check balances, request limit changes — all from the command line.",
+  "description": "Non-custodial, gas-sponsored smart wallets for AI agents on Base. Free gas, spending limits, passkey control.",
   "type": "module",
   "main": "./dist/sdk.js",
   "types": "./dist/sdk.d.ts",
