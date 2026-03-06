@@ -1,6 +1,6 @@
 {
   "name": "@agntos/agentwallet",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "Non-custodial, gas-sponsored smart wallets for AI agents on Base. Free gas, spending limits, passkey control.",
   "type": "module",
   "main": "./dist/sdk.js",
@@ -23,9 +23,20 @@
     "prepublishOnly": "npm run build"
   },
   "keywords": [
-    "ai", "agent", "wallet", "smart-wallet", "base", "ethereum",
-    "non-custodial", "passkey", "webauthn", "spending-limits",
-    "ai-agent", "autonomous-agent", "crypto", "defi"
+    "ai",
+    "agent",
+    "wallet",
+    "smart-wallet",
+    "base",
+    "ethereum",
+    "non-custodial",
+    "passkey",
+    "webauthn",
+    "spending-limits",
+    "ai-agent",
+    "autonomous-agent",
+    "crypto",
+    "defi"
   ],
   "author": "AgentOS <hello@agntos.dev>",
   "license": "MIT",
