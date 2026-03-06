@@ -1,5 +1,5 @@
 {
-  "name": "@0xartex/agentwallet",
+  "name": "@agntos/agentwallet",
   "version": "1.0.1",
   "description": "Non-custodial, gas-sponsored smart wallets for AI agents on Base. Free gas, spending limits, passkey control.",
   "type": "module",

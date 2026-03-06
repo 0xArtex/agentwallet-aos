@@ -132,7 +132,7 @@ ${c.bold}Environment${c.reset}
   ${c.yellow}AGENTWALLET_AGENT${c.reset}  Default agent address
 
 ${c.dim}Docs: https://github.com/0xArtex/agentwallet-aos${c.reset}
-${c.dim}npm:  https://www.npmjs.com/package/@0xartex/agentwallet${c.reset}
+${c.dim}npm:  https://www.npmjs.com/package/@agntos/agentwallet${c.reset}
 `)
 }
 

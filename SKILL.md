@@ -2,7 +2,7 @@
 
 Non-custodial, gas-sponsored smart wallets with on-chain spending limits, Chainlink oracle-based USD tracking, and passkey-based human control — all on Base. Every wallet gets free gas on creation so your agent can transact immediately.
 
-**npm:** `@0xartex/agentwallet`
+**npm:** `@agntos/agentwallet`
 **Chain:** Base (EVM, chain ID 8453)
 
 ## Safety Rules
@@ -22,7 +22,7 @@ Non-custodial, gas-sponsored smart wallets with on-chain spending limits, Chainl
 Your agent needs an EVM keypair. The public address identifies your agent on-chain. The private key signs transactions.
 
 ```bash
-npx @0xartex/agentwallet keygen
+npx @agntos/agentwallet keygen
 ```
 
 Output:
@@ -37,7 +37,7 @@ Output:
 
 For machine-readable output:
 ```bash
-npx @0xartex/agentwallet keygen --json
+npx @agntos/agentwallet keygen --json
 # {"address":"0x...","privateKey":"0x..."}
 ```
 
@@ -47,15 +47,15 @@ npx @0xartex/agentwallet keygen --json
 
 ```bash
 # Managed (human controls limits via passkey — recommended for production)
-npx @0xartex/agentwallet create --agent 0xYOUR_AGENT_ADDRESS
+npx @agntos/agentwallet create --agent 0xYOUR_AGENT_ADDRESS
 
 # Unmanaged (agent controls everything — use for autonomous agents only)
-npx @0xartex/agentwallet create --agent 0xYOUR_AGENT_ADDRESS --unmanaged
+npx @agntos/agentwallet create --agent 0xYOUR_AGENT_ADDRESS --unmanaged
 ```
 
 For machine-readable output:
 ```bash
-npx @0xartex/agentwallet create --agent 0xYOUR_AGENT_ADDRESS --json
+npx @agntos/agentwallet create --agent 0xYOUR_AGENT_ADDRESS --json
 ```
 
 **Managed wallets** return a `setupUrl` — send it to your human (e.g. via chat message). They set limits and register their passkey (FaceID/YubiKey). This is a one-time setup.
@@ -107,7 +107,7 @@ const remaining = await wallet.getRemainingDaily() // USDC units (6 decimals)
 const remainingUsd = Number(remaining) / 1e6
 if (remainingUsd < amountNeeded) {
   // Request a limit increase instead of failing
-  // npx @0xartex/agentwallet limits 0xWALLET --daily 200 --pertx 100
+  // npx @agntos/agentwallet limits 0xWALLET --daily 200 --pertx 100
 }
 ```
 
@@ -116,8 +116,8 @@ Transactions that exceed limits **revert instantly** on-chain. No approval queue
 ### 5. Check wallet status
 
 ```bash
-npx @0xartex/agentwallet status 0xWALLET_ADDRESS
-npx @0xartex/agentwallet status 0xWALLET_ADDRESS --json
+npx @agntos/agentwallet status 0xWALLET_ADDRESS
+npx @agntos/agentwallet status 0xWALLET_ADDRESS --json
 ```
 
 Use `--json` to parse status programmatically and make decisions based on remaining budget, pause state, etc.
@@ -127,7 +127,7 @@ Use `--json` to parse status programmatically and make decisions based on remain
 When your agent needs more spending capacity:
 
 ```bash
-npx @0xartex/agentwallet limits 0xWALLET --daily 200 --pertx 100 --reason "Trading requires higher limits"
+npx @agntos/agentwallet limits 0xWALLET --daily 200 --pertx 100 --reason "Trading requires higher limits"
 ```
 
 This returns a URL. Send the URL to your human (via chat, email, notification — whatever channel you have). The human opens the link, reviews the request, authenticates with their passkey, and limits are updated on-chain.
@@ -139,7 +139,7 @@ This returns a URL. Send the URL to your human (via chat, email, notification �
 If your human wants to cap exposure on a specific ERC-20 token:
 
 ```bash
-npx @0xartex/agentwallet token-limit 0xWALLET --token 0xTOKEN --token-daily 1000 --token-pertx 300
+npx @agntos/agentwallet token-limit 0xWALLET --token 0xTOKEN --token-daily 1000 --token-pertx 300
 ```
 
 ### 8. Emergency pause
@@ -147,7 +147,7 @@ npx @0xartex/agentwallet token-limit 0xWALLET --token 0xTOKEN --token-daily 1000
 If something goes wrong:
 
 ```bash
-npx @0xartex/agentwallet pause 0xWALLET --reason "Suspicious activity detected"
+npx @agntos/agentwallet pause 0xWALLET --reason "Suspicious activity detected"
 ```
 
 This sends a pause request to your human. Once approved, **all agent transactions revert** until unpaused. Use this as a safety mechanism if you detect unusual behavior.
@@ -155,16 +155,16 @@ This sends a pause request to your human. Once approved, **all agent transaction
 ## All Commands
 
 ```bash
-npx @0xartex/agentwallet keygen                        # generate agent keypair
-npx @0xartex/agentwallet create --agent 0x...          # managed wallet
-npx @0xartex/agentwallet create --agent 0x... --unmanaged  # autonomous wallet
-npx @0xartex/agentwallet status 0xWALLET               # wallet info + balances
-npx @0xartex/agentwallet limits 0xWALLET --daily N --pertx N --reason "..."
-npx @0xartex/agentwallet token-limit 0xWALLET --token 0x... --token-daily N --token-pertx N
-npx @0xartex/agentwallet rm-token 0xWALLET --token 0x...
-npx @0xartex/agentwallet pause 0xWALLET --reason "..."
-npx @0xartex/agentwallet unpause 0xWALLET
-npx @0xartex/agentwallet stats
+npx @agntos/agentwallet keygen                        # generate agent keypair
+npx @agntos/agentwallet create --agent 0x...          # managed wallet
+npx @agntos/agentwallet create --agent 0x... --unmanaged  # autonomous wallet
+npx @agntos/agentwallet status 0xWALLET               # wallet info + balances
+npx @agntos/agentwallet limits 0xWALLET --daily N --pertx N --reason "..."
+npx @agntos/agentwallet token-limit 0xWALLET --token 0x... --token-daily N --token-pertx N
+npx @agntos/agentwallet rm-token 0xWALLET --token 0x...
+npx @agntos/agentwallet pause 0xWALLET --reason "..."
+npx @agntos/agentwallet unpause 0xWALLET
+npx @agntos/agentwallet stats
 ```
 
 All commands support `--json` for machine-readable output.

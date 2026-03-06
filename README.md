@@ -5,7 +5,7 @@ Non-custodial, gas-sponsored smart wallets for AI agents on Base.
 Your agent gets a real wallet with free gas, spending limits, and human control via FaceID — all enforced by smart contracts, not trust.
 
 ```bash
-npx @0xartex/agentwallet create --agent 0xYourAgentAddress
+npx @agntos/agentwallet create --agent 0xYourAgentAddress
 ```
 
 ## Why
@@ -56,7 +56,7 @@ ETH and USDC spending is **aggregated** — if the daily limit is $50, spending 
 Your agent needs an EVM keypair. The **public address** identifies your agent on-chain. The **private key** is what your agent uses to sign transactions from the wallet.
 
 ```bash
-npx @0xartex/agentwallet keygen
+npx @agntos/agentwallet keygen
 ```
 
 ```
@@ -78,10 +78,10 @@ npx @0xartex/agentwallet keygen
 
 ```bash
 # Managed — human registers passkey to control limits
-npx @0xartex/agentwallet create --agent 0xYourAgentAddress
+npx @agntos/agentwallet create --agent 0xYourAgentAddress
 
 # Unmanaged — fully autonomous, no human needed
-npx @0xartex/agentwallet create --agent 0xYourAgentAddress --unmanaged
+npx @agntos/agentwallet create --agent 0xYourAgentAddress --unmanaged
 ```
 
 For managed wallets, you'll get a **setup URL**. Send it to your human. They open it, set spending limits, and register their passkey (FaceID/fingerprint/YubiKey). That's the one-time setup.
@@ -140,7 +140,7 @@ Every transaction is checked against your spending limits on-chain. If it exceed
 ### Step 5: Check your wallet
 
 ```bash
-npx @0xartex/agentwallet status 0xYourWallet
+npx @agntos/agentwallet status 0xYourWallet
 ```
 
 ```
@@ -161,7 +161,7 @@ npx @0xartex/agentwallet status 0xYourWallet
 ### Step 6: Need higher limits?
 
 ```bash
-npx @0xartex/agentwallet limits 0xWallet --daily 200 --pertx 100 --reason "Trading requires higher limits"
+npx @agntos/agentwallet limits 0xWallet --daily 200 --pertx 100 --reason "Trading requires higher limits"
 ```
 
 Returns a URL. Send it to your human → they review → authenticate with passkey → limits updated on-chain.
@@ -169,16 +169,16 @@ Returns a URL. Send it to your human → they review → authenticate with passk
 ## All Commands
 
 ```bash
-npx @0xartex/agentwallet keygen                        # generate agent keypair
-npx @0xartex/agentwallet create --agent 0x...          # managed wallet
-npx @0xartex/agentwallet create --agent 0x... --unmanaged  # autonomous wallet
-npx @0xartex/agentwallet status 0xWALLET               # wallet info + balances
-npx @0xartex/agentwallet limits 0xWALLET --daily 200 --pertx 100
-npx @0xartex/agentwallet token-limit 0xWALLET --token 0xTOKEN --token-daily 1000 --token-pertx 300
-npx @0xartex/agentwallet rm-token 0xWALLET --token 0xTOKEN
-npx @0xartex/agentwallet pause 0xWALLET
-npx @0xartex/agentwallet unpause 0xWALLET
-npx @0xartex/agentwallet stats
+npx @agntos/agentwallet keygen                        # generate agent keypair
+npx @agntos/agentwallet create --agent 0x...          # managed wallet
+npx @agntos/agentwallet create --agent 0x... --unmanaged  # autonomous wallet
+npx @agntos/agentwallet status 0xWALLET               # wallet info + balances
+npx @agntos/agentwallet limits 0xWALLET --daily 200 --pertx 100
+npx @agntos/agentwallet token-limit 0xWALLET --token 0xTOKEN --token-daily 1000 --token-pertx 300
+npx @agntos/agentwallet rm-token 0xWALLET --token 0xTOKEN
+npx @agntos/agentwallet pause 0xWALLET
+npx @agntos/agentwallet unpause 0xWALLET
+npx @agntos/agentwallet stats
 ```
 
 All commands support `--json` for machine-readable output.
@@ -221,7 +221,7 @@ The backend is a **convenience layer** — all security-critical logic is on-cha
 
 The CLI is the recommended way. But you can also:
 
-- **SDK** — `import { AgentWallet } from '@0xartex/agentwallet'` for programmatic use in Node.js/TypeScript
+- **SDK** — `import { AgentWallet } from '@agntos/agentwallet'` for programmatic use in Node.js/TypeScript
 - **REST API** — `POST https://agntos.dev/wallet/wallet` for direct HTTP calls
 - **Direct contract calls** — interact with the smart contracts on Base without any middleware
 
@@ -241,12 +241,12 @@ USDC_ADDRESS=0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913 \
 node dist/api/server.js
 ```
 
-Then: `npx @0xartex/agentwallet create --agent 0x... --url http://localhost:3002`
+Then: `npx @agntos/agentwallet create --agent 0x... --url http://localhost:3002`
 
 ## Project Structure
 
 ```
-cli/                          ← npm package (@0xartex/agentwallet)
+cli/                          ← npm package (@agntos/agentwallet)
 contracts/base/               ← Solidity smart contracts (45 Forge tests)
 contracts/solana/             ← Solana program (coming soon)
 src/api/                      ← REST API server

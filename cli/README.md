@@ -1,11 +1,11 @@
-# @0xartex/agentwallet
+# @agntos/agentwallet
 
 Non-custodial, gas-sponsored smart wallets for AI agents on Base.
 
 Your agent gets a real wallet with free gas, spending limits, and human control via FaceID — all enforced by smart contracts, not trust.
 
 ```bash
-npx @0xartex/agentwallet create --agent 0xYourAgentAddress
+npx @agntos/agentwallet create --agent 0xYourAgentAddress
 ```
 
 ## Why
@@ -25,7 +25,7 @@ No custody. No trust. Architecturally impossible to steal funds.
 ### 1. Generate a keypair
 
 ```bash
-npx @0xartex/agentwallet keygen
+npx @agntos/agentwallet keygen
 ```
 
 This gives you an **address** (your agent's identity) and a **private key** (signs transactions). Save the private key securely.
@@ -36,10 +36,10 @@ This gives you an **address** (your agent's identity) and a **private key** (sig
 
 ```bash
 # Managed — human controls limits via FaceID/YubiKey
-npx @0xartex/agentwallet create --agent 0xYourAgentAddress
+npx @agntos/agentwallet create --agent 0xYourAgentAddress
 
 # Unmanaged — fully autonomous, no human needed
-npx @0xartex/agentwallet create --agent 0xYourAgentAddress --unmanaged
+npx @agntos/agentwallet create --agent 0xYourAgentAddress --unmanaged
 ```
 
 Managed wallets return a **setup URL**. Send it to your human — one-time setup.
@@ -81,13 +81,13 @@ Transactions exceeding limits **revert instantly**. No queues, no waiting.
 ### 5. Check status
 
 ```bash
-npx @0xartex/agentwallet status 0xYourWallet
+npx @agntos/agentwallet status 0xYourWallet
 ```
 
 ### 6. Need higher limits?
 
 ```bash
-npx @0xartex/agentwallet limits 0xWallet --daily 200 --pertx 100
+npx @agntos/agentwallet limits 0xWallet --daily 200 --pertx 100
 ```
 
 Returns a URL → send to human → they approve with passkey → done.
