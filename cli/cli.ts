@@ -319,63 +319,10 @@ function toChecksumAddress(addrBytes: Uint8Array): string {
   return out
 }
 
-// ─── Keccak-256 (pure JS, zero deps) ───
+// ─── Keccak-256 (@noble/hashes — audited, tiny) ───
+import { keccak_256 } from '@noble/hashes/sha3.js'
 function keccak256(data: Uint8Array): Buffer {
-  const RATE = 136
-  const state = new BigUint64Array(25)
-  const buf = Buffer.from(data)
-
-  let pos = 0
-  while (pos + RATE <= buf.length) {
-    for (let i = 0; i < RATE / 8; i++) state[i] ^= buf.readBigUInt64LE(pos + i * 8)
-    keccakF1600(state)
-    pos += RATE
-  }
-
-  const last = Buffer.alloc(RATE)
-  buf.copy(last, 0, pos)
-  last[buf.length - pos] ^= 0x01
-  last[RATE - 1] ^= 0x80
-  for (let i = 0; i < RATE / 8; i++) state[i] ^= last.readBigUInt64LE(i * 8)
-  keccakF1600(state)
-
-  const out = Buffer.alloc(32)
-  for (let i = 0; i < 4; i++) out.writeBigUInt64LE(state[i], i * 8)
-  return out
-}
-
-function keccakF1600(s: BigUint64Array) {
-  const RC: bigint[] = [
-    0x0000000000000001n,0x0000000000008082n,0x800000000000808an,0x8000000080008000n,
-    0x000000000000808bn,0x0000000080000001n,0x8000000080008081n,0x8000000000008009n,
-    0x000000000000008an,0x0000000000000088n,0x0000000080008009n,0x000000008000000an,
-    0x000000008000808bn,0x800000000000008bn,0x8000000000008089n,0x8000000000008003n,
-    0x8000000000008002n,0x8000000000000080n,0x000000000000800an,0x800000008000000an,
-    0x8000000080008081n,0x8000000000008080n,0x0000000080000001n,0x8000000080008008n,
-  ]
-  const m = 0xFFFFFFFFFFFFFFFFn
-  const r = (x: bigint, n: bigint) => ((x << n) | (x >> (64n - n))) & m
-
-  for (let round = 0; round < 24; round++) {
-    // θ
-    const c0 = s[0]^s[5]^s[10]^s[15]^s[20], c1 = s[1]^s[6]^s[11]^s[16]^s[21]
-    const c2 = s[2]^s[7]^s[12]^s[17]^s[22], c3 = s[3]^s[8]^s[13]^s[18]^s[23]
-    const c4 = s[4]^s[9]^s[14]^s[19]^s[24]
-    const d0 = (c4 ^ r(c1,1n))&m, d1 = (c0 ^ r(c2,1n))&m
-    const d2 = (c1 ^ r(c3,1n))&m, d3 = (c2 ^ r(c4,1n))&m, d4 = (c3 ^ r(c0,1n))&m
-    for (let i = 0; i < 25; i += 5) { s[i]^=d0; s[i+1]^=d1; s[i+2]^=d2; s[i+3]^=d3; s[i+4]^=d4 }
-    // ρ + π
-    let t = s[1]
-    const PI=[10,7,11,17,18,3,5,16,8,21,24,4,15,23,19,13,12,2,20,14,22,9,6,1]
-    const RO=[1n,3n,6n,10n,15n,21n,28n,36n,45n,55n,2n,14n,27n,41n,56n,8n,25n,43n,62n,18n,39n,61n,20n,44n]
-    for (let i = 0; i < 24; i++) { const j=PI[i]; const u=s[j]; s[j]=r(t,RO[i]); t=u }
-    // χ
-    for (let y = 0; y < 25; y += 5) {
-      const a=s[y],b=s[y+1],c=s[y+2],d=s[y+3],e=s[y+4]
-      s[y]=(a^(~b&c))&m; s[y+1]=(b^(~c&d))&m; s[y+2]=(c^(~d&e))&m; s[y+3]=(d^(~e&a))&m; s[y+4]=(e^(~a&b))&m
-    }
-    s[0] = (s[0] ^ RC[round]) & m
-  }
+  return Buffer.from(keccak_256(data))
 }
 
 async function cmdStats(aw: AgentWallet, flags: Record<string, string | boolean>) {

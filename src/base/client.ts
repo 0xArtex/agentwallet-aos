@@ -38,8 +38,11 @@ export class BaseWalletClient {
   }
 
   async createManagedWallet(agentAddress: string): Promise<string> {
+    console.log("[createManagedWallet] sending tx for agent:", agentAddress);
     const tx = await this.factory.createManagedWallet(agentAddress);
+    console.log("[createManagedWallet] tx hash:", tx.hash);
     const receipt = await tx.wait();
+    console.log("[createManagedWallet] tx mined, block:", receipt?.blockNumber);
     const addr = this.extractWalletAddress(receipt) || agentAddress;
     await this.configureOracle(addr);
     return addr;
