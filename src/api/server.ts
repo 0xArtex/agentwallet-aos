@@ -55,6 +55,27 @@ app.get("/health", (_req, res) => {
   res.json({ status: "ok", chains: { base: !!baseClient, solana: false } });
 });
 
+// ─── Keygen (generate agent keypair) ───
+app.post("/keygen", async (_req, res) => {
+  try {
+    const { keccak_256 } = await import("@noble/hashes/sha3");
+    const privBytes = crypto.randomBytes(32);
+    const privateKey = "0x" + privBytes.toString("hex");
+    const ecdh = crypto.createECDH("secp256k1");
+    ecdh.setPrivateKey(privBytes);
+    const pubBytes = ecdh.getPublicKey().subarray(1);
+    const hash = Buffer.from(keccak_256(pubBytes));
+    const addrBytes = hash.subarray(12);
+    const hex = addrBytes.toString("hex");
+    const addrHash = Buffer.from(keccak_256(Buffer.from(hex))).toString("hex");
+    let checksummed = "0x";
+    for (let i = 0; i < 40; i++) checksummed += parseInt(addrHash[i], 16) >= 8 ? hex[i].toUpperCase() : hex[i];
+    res.json({ address: checksummed, privateKey });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 
 // ─── Create Wallet (unified) ───
 // POST /wallet {agent, mode: "managed"|"unmanaged"}

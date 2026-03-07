@@ -37,23 +37,51 @@ export class BaseWalletClient {
     this.usdcAddress = usdcAddress || "";
   }
 
+  private async sendWithRetry(fn: () => Promise<any>, label: string, maxRetries = 3): Promise<any> {
+    for (let attempt = 0; attempt < maxRetries; attempt++) {
+      try {
+        // Reset nonce cache before each attempt
+        const nonce = await this.provider.getTransactionCount(this.adminWallet.address, "latest");
+        console.log(`[${label}] attempt ${attempt + 1}, nonce: ${nonce}`);
+        const tx = await fn();
+        console.log(`[${label}] tx hash: ${tx.hash}`);
+        const receipt = await tx.wait();
+        console.log(`[${label}] mined, block: ${receipt?.blockNumber}`);
+        return receipt;
+      } catch (err: any) {
+        const code = err.code || "";
+        const msg = err.message || "";
+        const isRetryable = code === "NONCE_EXPIRED" || code === "REPLACEMENT_UNDERPRICED" ||
+          msg.includes("nonce too low") || msg.includes("replacement transaction underpriced") ||
+          msg.includes("already known");
+        if (isRetryable && attempt < maxRetries - 1) {
+          const delay = 1000 * (attempt + 1);
+          console.log(`[${label}] retryable error (${code}), waiting ${delay}ms...`);
+          await new Promise(r => setTimeout(r, delay));
+          continue;
+        }
+        throw err;
+      }
+    }
+  }
+
   async createManagedWallet(agentAddress: string): Promise<string> {
     console.log("[createManagedWallet] sending tx for agent:", agentAddress);
-    const tx = await this.factory.createManagedWallet(agentAddress);
-    console.log("[createManagedWallet] tx hash:", tx.hash);
-    const receipt = await tx.wait();
-    console.log("[createManagedWallet] tx mined, block:", receipt?.blockNumber);
+    const receipt = await this.sendWithRetry(
+      () => this.factory.createManagedWallet(agentAddress),
+      "createManagedWallet"
+    );
     const addr = this.extractWalletAddress(receipt) || agentAddress;
     await this.configureOracle(addr);
     return addr;
   }
 
   async createUnmanagedWallet(agentAddress: string): Promise<string> {
-    const tx = await this.factory.createUnmanagedWallet(agentAddress);
-    const receipt = await tx.wait();
+    const receipt = await this.sendWithRetry(
+      () => this.factory.createUnmanagedWallet(agentAddress),
+      "createUnmanagedWallet"
+    );
     const addr = this.extractWalletAddress(receipt) || agentAddress;
-    // Skip oracle for unmanaged — agent is owner and can set it themselves
-    // Admin can't call setOracle since owner = agent, not admin
     return addr;
   }
 
@@ -159,10 +187,11 @@ export class BaseWalletClient {
     if (!this.ethUsdOracle || !this.usdcAddress) return;
     try {
       const wallet = new Contract(walletAddress, WALLET_ABI, this.adminWallet);
-      const tx = await wallet.setOracle(this.ethUsdOracle, this.usdcAddress);
-      await tx.wait();
+      await this.sendWithRetry(
+        () => wallet.setOracle(this.ethUsdOracle, this.usdcAddress),
+        "configureOracle"
+      );
     } catch (e: any) {
-      // Oracle may already be set — ignore
       if (!e.message?.includes("oracle already set")) throw e;
     }
   }
