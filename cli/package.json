@@ -1,6 +1,6 @@
 {
   "name": "@agntos/agentwallet",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "Non-custodial, gas-sponsored smart wallets for AI agents on Base. Free gas, spending limits, passkey control.",
   "type": "module",
   "main": "./dist/sdk.js",
