@@ -164,6 +164,31 @@ function goStep(n) {
   }
 }
 
+// Auto-refresh expired token on page load
+function refreshToken() {
+  return fetch(window.location.origin + "/wallet/setup/refresh-token", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ wallet: wa, chain: chain })
+  }).then(function(r) { return r.json(); }).then(function(d) {
+    if (d.token) {
+      tk = d.token;
+      // Update URL without reload
+      var url = new URL(window.location);
+      url.searchParams.set("token", tk);
+      window.history.replaceState({}, "", url);
+      return true;
+    }
+    return false;
+  }).catch(function() { return false; });
+}
+
+async function ensureToken() {
+  // Try refreshing if token might be stale
+  var refreshed = await refreshToken();
+  return refreshed || !!tk;
+}
+
 function saveLimits() {
   hideErr(1);
   var dv = parseInt(document.getElementById("dl").value) * 1000000;
@@ -171,14 +196,25 @@ function saveLimits() {
   if (dv <= 0 || pv <= 0) { showErr(1, "Limits must be greater than 0"); return; }
   if (pv > dv) { showErr(1, "Per-transaction limit can't exceed daily limit"); return; }
 
-  fetch(window.location.origin + "/wallet/setup/set-limits", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ token: tk, wallet: wa, dailyLimit: "" + dv, perTxLimit: "" + pv })
-  }).then(function(r) { return r.json(); }).then(function(d) {
-    if (d.error) throw new Error(d.error);
-    goStep(2);
-  }).catch(function(e) { showErr(1, e.message); });
+  var doSave = function() {
+    fetch(window.location.origin + "/wallet/setup/set-limits", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ token: tk, wallet: wa, dailyLimit: "" + dv, perTxLimit: "" + pv })
+    }).then(function(r) { return r.json(); }).then(function(d) {
+      if (d.error && d.error.indexOf("expired") !== -1) {
+        // Token expired — refresh and retry once
+        refreshToken().then(function(ok) {
+          if (ok) doSave();
+          else showErr(1, "Setup session expired. Please request a new setup link.");
+        });
+        return;
+      }
+      if (d.error) throw new Error(d.error);
+      goStep(2);
+    }).catch(function(e) { showErr(1, e.message); });
+  };
+  doSave();
 }
 
 function registerPasskey() {
@@ -207,14 +243,23 @@ function registerPasskey() {
     for (var i = 0; i < rawId.length; i++) b64 += String.fromCharCode(rawId[i]);
     b64 = btoa(b64);
 
-    return fetch(window.location.origin + "/wallet/setup/register-passkey", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ token: tk, wallet: wa, pubKeyX: xy.x, pubKeyY: xy.y, credentialId: b64 })
-    });
-  }).then(function(r) { return r.json(); }).then(function(d) {
-    if (d.error) throw new Error(d.error);
-    goStep(3);
+    var sendReg = function() {
+      return fetch(window.location.origin + "/wallet/setup/register-passkey", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token: tk, wallet: wa, pubKeyX: xy.x, pubKeyY: xy.y, credentialId: b64 })
+      }).then(function(r) { return r.json(); }).then(function(d) {
+        if (d.error && d.error.indexOf("expired") !== -1) {
+          return refreshToken().then(function(ok) {
+            if (ok) return sendReg();
+            throw new Error("Setup session expired. Please request a new setup link.");
+          });
+        }
+        if (d.error) throw new Error(d.error);
+        goStep(3);
+      });
+    };
+    return sendReg();
   }).catch(function(e) {
     showErr(2, e.message);
     btn.disabled = false;

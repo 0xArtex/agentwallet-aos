@@ -296,6 +296,36 @@ app.get("/stats", async (_req, res) => {
 
 // (managed/unmanaged routes merged into POST /wallet above)
 
+// ─── Refresh Setup Token ───
+app.post("/setup/refresh-token", async (req, res) => {
+  const { wallet: walletAddr, chain: chainParam } = req.body;
+  if (!walletAddr) return res.status(400).json({ error: "wallet required" });
+
+  const chain = chainParam || (walletAddr.startsWith("0x") ? "base" : "solana");
+
+  try {
+    // Verify wallet exists and still needs setup (owner is still admin)
+    if (chain === "solana" && solanaClient) {
+      const info = await solanaClient.getWallet(walletAddr);
+      const adminPub = solanaClient.adminPublicKey.toBase58();
+      if (info.owner !== adminPub) return res.status(400).json({ error: "Wallet already set up (owner transferred)" });
+    } else if (chain === "base" && baseClient) {
+      const info = await baseClient.getWallet(walletAddr);
+      if (info.owner === "0x0000000000000000000000000000000000000000") return res.status(400).json({ error: "Wallet already set up (passkey registered)" });
+    } else {
+      return res.status(503).json({ error: "Chain client not configured" });
+    }
+
+    // Generate new token
+    const token = crypto.randomBytes(32).toString("hex");
+    setupTokens.set(token, { wallet: walletAddr, agent: "", chain, createdAt: Date.now() });
+    setTimeout(() => setupTokens.delete(token), 86400000);
+    res.json({ token });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ─── Setup Page ───
 app.get("/setup", (_req, res) => {
   try {
