@@ -19,6 +19,7 @@ export interface SolanaWalletInfo {
   remainingDaily: string;
   solBalance: string;
   gasBalance: string; // alias for solBalance for compatibility
+  passkeyRegistered: boolean;
   tokenLimits: Array<{ mint: string; dailyLimit: string; perTxLimit: string; spentToday: string }>;
 }
 
@@ -149,6 +150,7 @@ export class SolanaWalletClient {
       remainingDaily: remaining,
       solBalance: solBalance.toString(),
       gasBalance: solBalance.toString(),
+      passkeyRegistered: walletAccount.passkeyRegistered as boolean,
       tokenLimits,
     };
   }
@@ -164,6 +166,55 @@ export class SolanaWalletClient {
         owner: owner.publicKey,
       })
       .signers([owner])
+      .rpc();
+
+    return tx;
+  }
+
+  /** Set policy using admin keypair (admin must be current owner — for managed wallet setup) */
+  async setPolicyAsAdmin(walletAddress: string, dailyLimit: number, perTxLimit: number): Promise<string> {
+    const walletPubkey = new PublicKey(walletAddress);
+
+    const tx = await this.program.methods
+      .setPolicy(new BN(dailyLimit), new BN(perTxLimit))
+      .accounts({
+        wallet: walletPubkey,
+        owner: this.adminKeypair.publicKey,
+      })
+      .signers([this.adminKeypair])
+      .rpc();
+
+    return tx;
+  }
+
+  /** Register passkey on a wallet (admin must be current owner) */
+  async registerPasskey(walletAddress: string, passkeyPubkey: number[]): Promise<string> {
+    const walletPubkey = new PublicKey(walletAddress);
+
+    const tx = await this.program.methods
+      .registerPasskey(passkeyPubkey)
+      .accounts({
+        wallet: walletPubkey,
+        owner: this.adminKeypair.publicKey,
+      })
+      .signers([this.adminKeypair])
+      .rpc();
+
+    return tx;
+  }
+
+  /** Transfer ownership (admin must be current owner — final setup step) */
+  async transferOwnership(walletAddress: string, newOwner: string): Promise<string> {
+    const walletPubkey = new PublicKey(walletAddress);
+    const newOwnerPubkey = new PublicKey(newOwner);
+
+    const tx = await this.program.methods
+      .transferOwnership(newOwnerPubkey)
+      .accounts({
+        wallet: walletPubkey,
+        owner: this.adminKeypair.publicKey,
+      })
+      .signers([this.adminKeypair])
       .rpc();
 
     return tx;

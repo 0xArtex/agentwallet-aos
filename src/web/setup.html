@@ -71,6 +71,7 @@
         <h1>Wallet secured</h1>
         <p class="sub">Your passkey is registered and limits are set on-chain. Your agent can now transact within the limits you configured.</p>
         <div class="addr" id="wf"></div>
+        <div id="explorer-link" style="margin-top:12px"></div>
       </div>
     </div>
 
@@ -88,7 +89,9 @@
 var qs = new URLSearchParams(window.location.search);
 var tk = qs.get("token");
 var wa = qs.get("wallet");
-document.getElementById("wa").textContent = wa || "Unknown";
+var chain = qs.get("chain") || "base";
+var isSolana = chain === "solana";
+document.getElementById("wa").textContent = (wa || "Unknown") + (isSolana ? " (Solana)" : " (Base)");
 document.getElementById("wf").textContent = wa || "";
 
 // Detect Telegram/WebView — auto-open in system browser
@@ -151,6 +154,14 @@ function goStep(n) {
   document.getElementById("st1").className = "step" + (n === 1 ? " active" : " done");
   document.getElementById("st2").className = "step" + (n === 2 ? " active" : "") + (n > 2 ? " done" : "");
   document.getElementById("st3").className = "step" + (n === 3 ? " active done" : "");
+  if (n === 3) {
+    var el = document.getElementById("explorer-link");
+    if (isSolana) {
+      el.innerHTML = '<a href="https://explorer.solana.com/address/' + wa + '?cluster=devnet" target="_blank" style="color:#f54900;text-decoration:none;font-size:13px">View on Solana Explorer &rarr;</a>';
+    } else {
+      el.innerHTML = '<a href="https://basescan.org/address/' + wa + '" target="_blank" style="color:#f54900;text-decoration:none;font-size:13px">View on Basescan &rarr;</a>';
+    }
+  }
 }
 
 function saveLimits() {

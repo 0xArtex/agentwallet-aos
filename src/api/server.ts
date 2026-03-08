@@ -12,8 +12,8 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const app = express();
 app.use(express.json());
 
-// Setup tokens: token → {walletAddress, agentAddress, createdAt}
-const setupTokens = new Map<string, { wallet: string; agent: string; createdAt: number }>();
+// Setup tokens: token → {walletAddress, agentAddress, chain, createdAt}
+const setupTokens = new Map<string, { wallet: string; agent: string; chain: string; createdAt: number }>();
 
 // Wallet credential IDs: walletAddress → credentialId (base64) — persisted to disk
 const CREDS_FILE = join(dirname(fileURLToPath(import.meta.url)), "../../../data/credentials.json");
@@ -135,10 +135,10 @@ app.post("/wallet", async (req, res) => {
 
       if (mode === "managed") {
         const token = crypto.randomBytes(32).toString("hex");
-        setupTokens.set(token, { wallet: walletAddress, agent, createdAt: Date.now() });
+        setupTokens.set(token, { wallet: walletAddress, agent, chain: "solana", createdAt: Date.now() });
         setTimeout(() => setupTokens.delete(token), 86400000);
         const baseUrl = process.env.BASE_URL || "https://agntos.dev";
-        const setupUrl = `${baseUrl}/wallet/setup?token=${token}&wallet=${walletAddress}`;
+        const setupUrl = `${baseUrl}/wallet/setup?token=${token}&wallet=${walletAddress}&chain=solana`;
         return res.json({ wallet: info, setupUrl, setupToken: token, mode: "managed" });
       }
       return res.json({ wallet: info, mode: "unmanaged" });
@@ -156,11 +156,11 @@ app.post("/wallet", async (req, res) => {
       await new Promise(r => setTimeout(r, 2000));
       const info = await baseClient!.getWallet(address);
       const token = crypto.randomBytes(32).toString("hex");
-      setupTokens.set(token, { wallet: address, agent, createdAt: Date.now() });
+      setupTokens.set(token, { wallet: address, agent, chain: "base", createdAt: Date.now() });
       setTimeout(() => setupTokens.delete(token), 86400000);
       // Always use agntos.dev for public URLs since we're behind a proxy
       const baseUrl = process.env.BASE_URL || "https://agntos.dev";
-      const setupUrl = `${baseUrl}/wallet/setup?token=${token}&wallet=${address}`;
+      const setupUrl = `${baseUrl}/wallet/setup?token=${token}&wallet=${address}&chain=base`;
       res.json({ wallet: info, setupUrl, setupToken: token, mode: "managed" });
     } catch (err: any) {
       res.status(500).json({ error: err.message });
@@ -307,7 +307,7 @@ app.get("/setup", (_req, res) => {
 });
 
 // ─── Register Passkey (called from setup page) ───
-app.post("/setup/register-passkey", requireBase, async (req, res) => {
+app.post("/setup/register-passkey", async (req, res) => {
   const { token, wallet: walletAddr, pubKeyX, pubKeyY, credentialId } = req.body;
   if (!token || !walletAddr || !pubKeyX || !pubKeyY) {
     return res.status(400).json({ error: "Missing required fields" });
@@ -319,7 +319,18 @@ app.post("/setup/register-passkey", requireBase, async (req, res) => {
   }
 
   try {
-    const txHash = await baseClient!.registerPasskey(walletAddr, pubKeyX, pubKeyY);
+    let txHash: string;
+    if (setup.chain === "solana") {
+      if (!solanaClient) return res.status(503).json({ error: "Solana client not configured" });
+      // Convert hex pubkey X,Y to 64-byte array for Solana program
+      const xBytes = Buffer.from(pubKeyX.replace("0x", ""), "hex");
+      const yBytes = Buffer.from(pubKeyY.replace("0x", ""), "hex");
+      const passkeyPubkey = Array.from(Buffer.concat([xBytes, yBytes]));
+      txHash = await solanaClient.registerPasskey(walletAddr, passkeyPubkey);
+    } else {
+      if (!baseClient) return res.status(503).json({ error: "Base client not configured" });
+      txHash = await baseClient.registerPasskey(walletAddr, pubKeyX, pubKeyY);
+    }
     if (credentialId) {
       walletCredentials.set(walletAddr.toLowerCase(), credentialId);
       saveCredentials(walletCredentials);
@@ -332,7 +343,7 @@ app.post("/setup/register-passkey", requireBase, async (req, res) => {
 });
 
 // ─── Set Limits (called from setup page) ───
-app.post("/setup/set-limits", requireBase, async (req, res) => {
+app.post("/setup/set-limits", async (req, res) => {
   const { token, wallet: walletAddr, dailyLimit, perTxLimit } = req.body;
   if (!token || !walletAddr) {
     return res.status(400).json({ error: "Missing required fields" });
@@ -344,15 +355,19 @@ app.post("/setup/set-limits", requireBase, async (req, res) => {
   }
 
   try {
-    // Admin (factory deployer) is temp owner before passkey registration,
-    // so we can set policy via the admin key
-    const txHash = await baseClient!.setPolicy(
-      walletAddr,
-      process.env.ADMIN_PRIVATE_KEY || "",
-      BigInt(dailyLimit || 0),
-      BigInt(perTxLimit || 0)
-    );
-
+    let txHash: string;
+    if (setup.chain === "solana") {
+      if (!solanaClient) return res.status(503).json({ error: "Solana client not configured" });
+      txHash = await solanaClient.setPolicyAsAdmin(walletAddr, parseInt(dailyLimit || "0"), parseInt(perTxLimit || "0"));
+    } else {
+      if (!baseClient) return res.status(503).json({ error: "Base client not configured" });
+      txHash = await baseClient.setPolicy(
+        walletAddr,
+        process.env.ADMIN_PRIVATE_KEY || "",
+        BigInt(dailyLimit || 0),
+        BigInt(perTxLimit || 0)
+      );
+    }
     res.json({ success: true, txHash, message: "Limits configured" });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
