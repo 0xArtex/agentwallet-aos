@@ -4,6 +4,9 @@ import { join, dirname } from "path";
 import { fileURLToPath } from "url";
 import crypto from "crypto";
 import { BaseWalletClient } from "../base/client.js";
+import { SolanaWalletClient } from "../solana/client.js";
+import { Keypair } from "@solana/web3.js";
+import bs58 from "bs58";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -45,6 +48,25 @@ if (ADMIN_KEY && FACTORY_ADDRESS) {
   console.warn("Missing ADMIN_PRIVATE_KEY or FACTORY_ADDRESS — Base disabled");
 }
 
+// ─── Solana Client ───
+const SOLANA_RPC = process.env.SOLANA_RPC || "https://api.devnet.solana.com";
+const SOLANA_ADMIN_KEY = process.env.SOLANA_ADMIN_KEY || "";
+const SOLANA_ADMIN_KEY_FILE = process.env.SOLANA_ADMIN_KEY_FILE || "";
+const SOLANA_PROGRAM_ID = process.env.SOLANA_PROGRAM_ID || "4XHYgv4fczfAtkKB792yrP57iakR9extKtkigsXCJm5e";
+
+let solanaClient: SolanaWalletClient | null = null;
+const solanaAdminKey = SOLANA_ADMIN_KEY || SOLANA_ADMIN_KEY_FILE;
+if (solanaAdminKey) {
+  try {
+    solanaClient = new SolanaWalletClient(SOLANA_RPC, solanaAdminKey, SOLANA_PROGRAM_ID);
+    console.log("Solana wallet client initialized");
+  } catch (e: any) {
+    console.warn("Solana client init failed:", e.message);
+  }
+} else {
+  console.warn("Missing SOLANA_ADMIN_KEY — Solana disabled");
+}
+
 const requireBase = (_req: any, res: any, next: any) => {
   if (!baseClient) return res.status(503).json({ error: "Base client not configured" });
   next();
@@ -52,12 +74,23 @@ const requireBase = (_req: any, res: any, next: any) => {
 
 // ─── Health ───
 app.get("/health", (_req, res) => {
-  res.json({ status: "ok", chains: { base: !!baseClient, solana: false } });
+  res.json({ status: "ok", chains: { base: !!baseClient, solana: !!solanaClient } });
 });
 
 // ─── Keygen (generate agent keypair) ───
-app.post("/keygen", async (_req, res) => {
+app.post("/keygen", async (req, res) => {
   try {
+    const chain = req.body?.chain || "base";
+    if (chain === "solana") {
+      const kp = Keypair.generate();
+      res.json({
+        address: kp.publicKey.toBase58(),
+        privateKey: bs58.encode(kp.secretKey),
+        chain: "solana",
+      });
+      return;
+    }
+    // Default: EVM keygen
     const { keccak_256 } = await import("@noble/hashes/sha3");
     const privBytes = crypto.randomBytes(32);
     const privateKey = "0x" + privBytes.toString("hex");
@@ -70,7 +103,7 @@ app.post("/keygen", async (_req, res) => {
     const addrHash = Buffer.from(keccak_256(Buffer.from(hex))).toString("hex");
     let checksummed = "0x";
     for (let i = 0; i < 40; i++) checksummed += parseInt(addrHash[i], 16) >= 8 ? hex[i].toUpperCase() : hex[i];
-    res.json({ address: checksummed, privateKey });
+    res.json({ address: checksummed, privateKey, chain: "base" });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
@@ -80,9 +113,42 @@ app.post("/keygen", async (_req, res) => {
 // ─── Create Wallet (unified) ───
 // POST /wallet {agent, mode: "managed"|"unmanaged"}
 // Defaults to managed if mode not specified
-app.post("/wallet", requireBase, async (req, res) => {
-  const { agent, mode = "managed" } = req.body;
+app.post("/wallet", async (req, res) => {
+  const { agent, mode = "managed", chain = "base" } = req.body;
   if (!agent) return res.status(400).json({ error: "agent address required" });
+
+  // ─── Solana wallet creation ───
+  if (chain === "solana") {
+    if (!solanaClient) return res.status(503).json({ error: "Solana client not configured" });
+    const dailyLimit = req.body.dailyLimit || 1_000_000;
+    const perTxLimit = req.body.perTxLimit || 500_000;
+    try {
+      let owner: string;
+      if (mode === "unmanaged") {
+        owner = agent;
+      } else {
+        owner = solanaClient.adminPublicKey.toBase58();
+      }
+      const walletAddress = await solanaClient.createWallet(owner, agent, dailyLimit, perTxLimit);
+      await new Promise(r => setTimeout(r, 2000));
+      const info = await solanaClient.getWallet(walletAddress);
+
+      if (mode === "managed") {
+        const token = crypto.randomBytes(32).toString("hex");
+        setupTokens.set(token, { wallet: walletAddress, agent, createdAt: Date.now() });
+        setTimeout(() => setupTokens.delete(token), 86400000);
+        const baseUrl = process.env.BASE_URL || "https://agntos.dev";
+        const setupUrl = `${baseUrl}/wallet/setup?token=${token}&wallet=${walletAddress}`;
+        return res.json({ wallet: info, setupUrl, setupToken: token, mode: "managed" });
+      }
+      return res.json({ wallet: info, mode: "unmanaged" });
+    } catch (err: any) {
+      return res.status(500).json({ error: err.message });
+    }
+  }
+
+  // ─── Base wallet creation ───
+  if (!baseClient) return res.status(503).json({ error: "Base client not configured" });
 
   if (mode === "managed") {
     try {
@@ -114,16 +180,30 @@ app.post("/wallet", requireBase, async (req, res) => {
 });
 
 // ─── Get Wallet ───
-app.get("/wallet/:address", requireBase, async (req, res) => {
+app.get("/wallet/:address", async (req, res) => {
   const addr = req.params.address;
-  if (!/^0x[0-9a-fA-F]{40}$/.test(addr)) {
-    return res.status(400).json({ error: "Invalid wallet address" });
+
+  // Detect chain by address format
+  if (addr.startsWith("0x")) {
+    if (!baseClient) return res.status(503).json({ error: "Base client not configured" });
+    if (!/^0x[0-9a-fA-F]{40}$/.test(addr)) {
+      return res.status(400).json({ error: "Invalid wallet address" });
+    }
+    try {
+      const info = await baseClient.getWallet(addr);
+      return res.json({ wallet: info });
+    } catch (err: any) {
+      return res.status(404).json({ error: "Wallet not found or not an AgentWallet" });
+    }
   }
+
+  // Solana address
+  if (!solanaClient) return res.status(503).json({ error: "Solana client not configured" });
   try {
-    const info = await baseClient!.getWallet(addr);
-    res.json({ wallet: info });
+    const info = await solanaClient.getWallet(addr);
+    return res.json({ wallet: info });
   } catch (err: any) {
-    res.status(404).json({ error: "Wallet not found or not an AgentWallet" });
+    return res.status(404).json({ error: "Wallet not found on Solana" });
   }
 });
 
@@ -200,10 +280,15 @@ app.post("/wallet/:address/topup", requireBase, async (req, res) => {
 });
 
 // ─── Stats ───
-app.get("/stats", requireBase, async (_req, res) => {
+app.get("/stats", async (_req, res) => {
   try {
-    const total = await baseClient!.totalWallets();
-    res.json({ totalWallets: total });
+    const baseTotal = baseClient ? await baseClient.totalWallets() : 0;
+    const solanaTotal = solanaClient ? await solanaClient.totalWallets() : 0;
+    res.json({
+      totalWallets: baseTotal + solanaTotal,
+      base: { totalWallets: baseTotal },
+      solana: { totalWallets: solanaTotal },
+    });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }

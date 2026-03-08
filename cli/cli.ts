@@ -17,7 +17,7 @@ const c = {
   orange: '\x1b[38;5;208m',
 }
 
-const VERSION = '1.0.1'
+const VERSION = '1.1.0'
 
 // ─── Parse args ───
 function parse(argv: string[]) {
@@ -104,6 +104,7 @@ ${c.bold}Options${c.reset}
   ${c.yellow}--token-pertx${c.reset} ${c.dim}<n>${c.reset}   Token per-tx limit
   ${c.yellow}--decimals${c.reset} ${c.dim}<n>${c.reset}      Token decimals (default: 18)
   ${c.yellow}--reason${c.reset} ${c.dim}<text>${c.reset}     Reason for the request
+  ${c.yellow}--chain${c.reset} ${c.dim}<chain>${c.reset}     Chain: base (default) or solana
   ${c.yellow}--unmanaged${c.reset}         Create without human owner
   ${c.yellow}--url${c.reset} ${c.dim}<url>${c.reset}         API base URL
   ${c.yellow}--json${c.reset}             Output raw JSON
@@ -155,9 +156,10 @@ async function cmdCreate(aw: AgentWallet, flags: Record<string, string | boolean
     process.exit(1)
   }
 
+  const chain = (flags.chain as string || 'base') as 'base' | 'solana'
   const data = flags.unmanaged
-    ? await aw.createUnmanaged(agent!)
-    : await aw.create(agent!)
+    ? await aw.createUnmanaged(agent!, chain)
+    : await aw.create(agent!, chain)
 
   if (flags.json) return console.log(JSON.stringify(data, null, 2))
 
@@ -168,7 +170,9 @@ async function cmdCreate(aw: AgentWallet, flags: Record<string, string | boolean
   row('Mode', data.mode, data.mode === 'managed' ? c.yellow : c.green)
   row('Daily limit', `$${Number(w.policy.dailyLimit) / 1e6}`)
   row('Per-tx limit', `$${Number(w.policy.perTxLimit) / 1e6}`)
-  row('Gas funded', `${Number(w.gasBalance) / 1e18} ETH`, c.green)
+  const gasUnit = w.chain === 'solana' ? 'SOL' : 'ETH'
+  const gasDivisor = w.chain === 'solana' ? 1e9 : 1e18
+  row('Gas funded', `${Number(w.gasBalance) / gasDivisor} ${gasUnit}`, c.green)
 
   if (data.setupUrl) {
     console.log()
@@ -210,7 +214,9 @@ async function cmdStatus(aw: AgentWallet, positional: string[], flags: Record<st
   row('Spent today', `$${spent} / $${daily}`, spent > 0 ? c.yellow : c.green)
   row('Remaining', `$${remaining}`, remaining < daily * 0.1 ? c.red : c.green)
   row('Per-tx limit', `$${Number(w.policy.perTxLimit) / 1e6}`)
-  row('Gas balance', `${Number(w.gasBalance) / 1e18} ETH`, Number(w.gasBalance) < 5000000000000 ? c.yellow : c.green)
+  const gasUnit = w.chain === 'solana' ? 'SOL' : 'ETH'
+  const gasDivisor = w.chain === 'solana' ? 1e9 : 1e18
+  row('Gas balance', `${Number(w.gasBalance) / gasDivisor} ${gasUnit}`, Number(w.gasBalance) < 5000000000000 ? c.yellow : c.green)
   console.log()
 }
 
@@ -281,6 +287,43 @@ async function cmdUnpause(aw: AgentWallet, positional: string[], flags: Record<s
 }
 
 async function cmdKeygen(flags: Record<string, string | boolean>) {
+  const chain = (flags.chain as string) || 'base'
+
+  if (chain === 'solana') {
+    // Use Node.js built-in Ed25519 keygen
+    const cryptoMod = await import('crypto')
+    const { publicKey: pubKeyObj, privateKey: privKeyObj } = cryptoMod.generateKeyPairSync('ed25519', {
+      publicKeyEncoding: { type: 'spki', format: 'der' },
+      privateKeyEncoding: { type: 'pkcs8', format: 'der' },
+    })
+    // Ed25519 DER public key: last 32 bytes; DER private key: last 32 bytes of seed
+    const pubBytes = (pubKeyObj as Buffer).subarray(-32)
+    const privBytes = (privKeyObj as Buffer).subarray(-32)
+    // Solana keypair = 64 bytes (privkey seed + pubkey)
+    const fullSecret = Buffer.concat([privBytes, pubBytes])
+    const address = base58Encode(pubBytes)
+    const privateKey = base58Encode(fullSecret)
+
+    if (flags.json) {
+      console.log(JSON.stringify({ address, privateKey, chain: 'solana' }))
+      return
+    }
+
+    header('New Solana Agent Keypair')
+    row('Address', address, c.bold + c.white)
+    row('Private key', privateKey, c.yellow)
+    row('Chain', 'solana', c.cyan)
+    console.log()
+    console.log(`  ${c.dim}Save the private key securely — your agent needs it to sign transactions.${c.reset}`)
+    console.log(`  ${c.dim}Never share it. Never commit it to git.${c.reset}`)
+    console.log()
+    console.log(`  ${c.dim}Create a wallet with this key:${c.reset}`)
+    console.log(`  ${c.green}$${c.reset} agentwallet create --agent ${address} --chain solana`)
+    console.log()
+    return
+  }
+
+  // Default: EVM keygen
   const crypto = await import('crypto')
   const privBytes = crypto.randomBytes(32)
   const privKey = '0x' + privBytes.toString('hex')
@@ -293,7 +336,7 @@ async function cmdKeygen(flags: Record<string, string | boolean>) {
   const address = '0x' + toChecksumAddress(hash.subarray(12))
 
   if (flags.json) {
-    console.log(JSON.stringify({ address, privateKey: privKey }))
+    console.log(JSON.stringify({ address, privateKey: privKey, chain: 'base' }))
     return
   }
 
@@ -307,6 +350,33 @@ async function cmdKeygen(flags: Record<string, string | boolean>) {
   console.log(`  ${c.dim}Create a wallet with this key:${c.reset}`)
   console.log(`  ${c.green}$${c.reset} agentwallet create --agent ${address}`)
   console.log()
+}
+
+// Minimal base58 encoder
+function base58Encode(bytes: Uint8Array): string {
+  const ALPHABET = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz'
+  const digits: number[] = [0]
+  for (const byte of bytes) {
+    for (let i = 0; i < digits.length; i++) digits[i] *= 256
+    digits[0] += byte
+    let carry = 0
+    for (let i = 0; i < digits.length; i++) {
+      digits[i] += carry
+      carry = (digits[i] / 58) | 0
+      digits[i] %= 58
+    }
+    while (carry) {
+      digits.push(carry % 58)
+      carry = (carry / 58) | 0
+    }
+  }
+  let str = ''
+  for (const byte of bytes) {
+    if (byte !== 0) break
+    str += '1'
+  }
+  for (let i = digits.length - 1; i >= 0; i--) str += ALPHABET[digits[i]]
+  return str
 }
 
 function toChecksumAddress(addrBytes: Uint8Array): string {

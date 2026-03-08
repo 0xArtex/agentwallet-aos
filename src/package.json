@@ -3,13 +3,13 @@
   "version": "0.1.0",
   "description": "Non-custodial smart wallets for AI agents",
   "type": "module",
-
   "scripts": {
-    "build": "tsc && cp -r base/abi dist/base/abi && cp -r web dist/web",
+    "build": "tsc && cp -r base/abi dist/base/abi && cp -r web dist/web && mkdir -p dist/solana && cp solana/idl.json dist/solana/idl.json",
     "start": "node dist/api/server.js",
     "test:contracts": "cd ../contracts/base && forge test -v"
   },
   "dependencies": {
+    "@coral-xyz/anchor": "^0.30.1",
     "@solana/spl-token": "^0.4",
     "@solana/web3.js": "^1.98",
     "better-sqlite3": "^11.7",

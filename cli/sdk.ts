@@ -73,18 +73,23 @@ export class AgentWallet {
   }
 
   /** Create a managed wallet (human registers passkey later) */
-  async create(agent: string): Promise<CreateResult> {
-    return this.request('POST', '/wallet', { agent })
+  async create(agent: string, chain: 'base' | 'solana' = 'base'): Promise<CreateResult> {
+    return this.request('POST', '/wallet', { agent, chain })
   }
 
   /** Create an unmanaged wallet (agent is its own owner) */
-  async createUnmanaged(agent: string): Promise<CreateResult> {
-    return this.request('POST', '/wallet', { agent, mode: 'unmanaged' })
+  async createUnmanaged(agent: string, chain: 'base' | 'solana' = 'base'): Promise<CreateResult> {
+    return this.request('POST', '/wallet', { agent, mode: 'unmanaged', chain })
   }
 
   /** Get wallet info, balances, and policy */
   async status(wallet: string): Promise<{ wallet: WalletInfo }> {
     return this.request('GET', `/wallet/${wallet}`)
+  }
+
+  /** Generate a keypair */
+  async keygen(chain: 'base' | 'solana' = 'base'): Promise<{ address: string; privateKey: string; chain: string }> {
+    return this.request('POST', '/keygen', { chain })
   }
 
   /** Get total wallets created */

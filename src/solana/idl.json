@@ -1,0 +1,1022 @@
+{
+  "address": "4XHYgv4fczfAtkKB792yrP57iakR9extKtkigsXCJm5e",
+  "metadata": {
+    "name": "agent_wallet",
+    "version": "0.1.0",
+    "spec": "0.1.0",
+    "description": "Created with Anchor"
+  },
+  "instructions": [
+    {
+      "name": "create_wallet",
+      "discriminator": [
+        82,
+        172,
+        128,
+        18,
+        161,
+        207,
+        88,
+        63
+      ],
+      "accounts": [
+        {
+          "name": "factory",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  102,
+                  97,
+                  99,
+                  116,
+                  111,
+                  114,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "wallet",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  119,
+                  97,
+                  108,
+                  108,
+                  101,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "owner"
+              },
+              {
+                "kind": "account",
+                "path": "agent"
+              },
+              {
+                "kind": "account",
+                "path": "factory.total_wallets",
+                "account": "Factory"
+              }
+            ]
+          }
+        },
+        {
+          "name": "owner"
+        },
+        {
+          "name": "agent"
+        },
+        {
+          "name": "payer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "daily_limit",
+          "type": "u64"
+        },
+        {
+          "name": "per_tx_limit",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "initialize_factory",
+      "discriminator": [
+        179,
+        64,
+        75,
+        250,
+        39,
+        254,
+        240,
+        178
+      ],
+      "accounts": [
+        {
+          "name": "factory",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  102,
+                  97,
+                  99,
+                  116,
+                  111,
+                  114,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "admin",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "pause",
+      "discriminator": [
+        211,
+        22,
+        221,
+        251,
+        74,
+        121,
+        193,
+        47
+      ],
+      "accounts": [
+        {
+          "name": "wallet",
+          "writable": true
+        },
+        {
+          "name": "owner",
+          "signer": true
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "pause_with_passkey",
+      "discriminator": [
+        4,
+        26,
+        84,
+        51,
+        30,
+        133,
+        165,
+        245
+      ],
+      "accounts": [
+        {
+          "name": "wallet",
+          "writable": true
+        },
+        {
+          "name": "payer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "instructions_sysvar",
+          "address": "Sysvar1nstructions1111111111111111111111111"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "register_passkey",
+      "discriminator": [
+        16,
+        2,
+        121,
+        116,
+        194,
+        17,
+        247,
+        233
+      ],
+      "accounts": [
+        {
+          "name": "wallet",
+          "writable": true
+        },
+        {
+          "name": "owner",
+          "signer": true
+        }
+      ],
+      "args": [
+        {
+          "name": "passkey_pubkey",
+          "type": {
+            "array": [
+              "u8",
+              64
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "remove_token_limit",
+      "discriminator": [
+        24,
+        118,
+        61,
+        17,
+        89,
+        152,
+        57,
+        242
+      ],
+      "accounts": [
+        {
+          "name": "wallet",
+          "writable": true
+        },
+        {
+          "name": "owner",
+          "signer": true
+        }
+      ],
+      "args": [
+        {
+          "name": "mint",
+          "type": "pubkey"
+        }
+      ]
+    },
+    {
+      "name": "set_policy",
+      "discriminator": [
+        40,
+        133,
+        12,
+        157,
+        235,
+        202,
+        2,
+        132
+      ],
+      "accounts": [
+        {
+          "name": "wallet",
+          "writable": true
+        },
+        {
+          "name": "owner",
+          "signer": true
+        }
+      ],
+      "args": [
+        {
+          "name": "daily_limit",
+          "type": "u64"
+        },
+        {
+          "name": "per_tx_limit",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "set_policy_with_passkey",
+      "discriminator": [
+        217,
+        198,
+        92,
+        6,
+        122,
+        68,
+        14,
+        113
+      ],
+      "accounts": [
+        {
+          "name": "wallet",
+          "writable": true
+        },
+        {
+          "name": "payer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "instructions_sysvar",
+          "address": "Sysvar1nstructions1111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "daily_limit",
+          "type": "u64"
+        },
+        {
+          "name": "per_tx_limit",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "set_token_limit",
+      "discriminator": [
+        216,
+        80,
+        182,
+        245,
+        223,
+        87,
+        77,
+        53
+      ],
+      "accounts": [
+        {
+          "name": "wallet",
+          "writable": true
+        },
+        {
+          "name": "owner",
+          "signer": true
+        }
+      ],
+      "args": [
+        {
+          "name": "mint",
+          "type": "pubkey"
+        },
+        {
+          "name": "daily_limit",
+          "type": "u64"
+        },
+        {
+          "name": "per_tx_limit",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "set_token_limit_with_passkey",
+      "discriminator": [
+        213,
+        232,
+        158,
+        224,
+        81,
+        206,
+        221,
+        134
+      ],
+      "accounts": [
+        {
+          "name": "wallet",
+          "writable": true
+        },
+        {
+          "name": "payer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "instructions_sysvar",
+          "address": "Sysvar1nstructions1111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "mint",
+          "type": "pubkey"
+        },
+        {
+          "name": "daily_limit",
+          "type": "u64"
+        },
+        {
+          "name": "per_tx_limit",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "transfer_ownership",
+      "discriminator": [
+        65,
+        177,
+        215,
+        73,
+        53,
+        45,
+        99,
+        47
+      ],
+      "accounts": [
+        {
+          "name": "wallet",
+          "writable": true
+        },
+        {
+          "name": "owner",
+          "signer": true
+        }
+      ],
+      "args": [
+        {
+          "name": "new_owner",
+          "type": "pubkey"
+        }
+      ]
+    },
+    {
+      "name": "transfer_ownership_with_passkey",
+      "discriminator": [
+        254,
+        80,
+        169,
+        162,
+        100,
+        69,
+        197,
+        122
+      ],
+      "accounts": [
+        {
+          "name": "wallet",
+          "writable": true
+        },
+        {
+          "name": "payer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "instructions_sysvar",
+          "address": "Sysvar1nstructions1111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "new_owner",
+          "type": "pubkey"
+        }
+      ]
+    },
+    {
+      "name": "transfer_sol",
+      "discriminator": [
+        78,
+        10,
+        236,
+        247,
+        109,
+        117,
+        21,
+        76
+      ],
+      "accounts": [
+        {
+          "name": "wallet",
+          "writable": true
+        },
+        {
+          "name": "agent",
+          "signer": true
+        },
+        {
+          "name": "recipient",
+          "writable": true
+        }
+      ],
+      "args": [
+        {
+          "name": "amount_usdc",
+          "type": "u64"
+        },
+        {
+          "name": "amount_lamports",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "transfer_token",
+      "discriminator": [
+        219,
+        17,
+        122,
+        53,
+        237,
+        171,
+        232,
+        222
+      ],
+      "accounts": [
+        {
+          "name": "wallet",
+          "writable": true
+        },
+        {
+          "name": "agent",
+          "signer": true
+        },
+        {
+          "name": "mint"
+        },
+        {
+          "name": "wallet_token_account",
+          "writable": true
+        },
+        {
+          "name": "recipient_token_account",
+          "writable": true
+        },
+        {
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        }
+      ],
+      "args": [
+        {
+          "name": "amount",
+          "type": "u64"
+        },
+        {
+          "name": "amount_usdc",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "unpause",
+      "discriminator": [
+        169,
+        144,
+        4,
+        38,
+        10,
+        141,
+        188,
+        255
+      ],
+      "accounts": [
+        {
+          "name": "wallet",
+          "writable": true
+        },
+        {
+          "name": "owner",
+          "signer": true
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "unpause_with_passkey",
+      "discriminator": [
+        158,
+        81,
+        55,
+        65,
+        56,
+        189,
+        177,
+        154
+      ],
+      "accounts": [
+        {
+          "name": "wallet",
+          "writable": true
+        },
+        {
+          "name": "payer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "instructions_sysvar",
+          "address": "Sysvar1nstructions1111111111111111111111111"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "withdraw_sol",
+      "discriminator": [
+        145,
+        131,
+        74,
+        136,
+        65,
+        137,
+        42,
+        38
+      ],
+      "accounts": [
+        {
+          "name": "wallet",
+          "writable": true
+        },
+        {
+          "name": "owner",
+          "signer": true
+        },
+        {
+          "name": "recipient",
+          "writable": true
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "withdraw_token",
+      "discriminator": [
+        136,
+        235,
+        181,
+        5,
+        101,
+        109,
+        57,
+        81
+      ],
+      "accounts": [
+        {
+          "name": "wallet",
+          "writable": true
+        },
+        {
+          "name": "owner",
+          "signer": true
+        },
+        {
+          "name": "wallet_token_account",
+          "writable": true
+        },
+        {
+          "name": "recipient_token_account",
+          "writable": true
+        },
+        {
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        }
+      ],
+      "args": []
+    }
+  ],
+  "accounts": [
+    {
+      "name": "Factory",
+      "discriminator": [
+        159,
+        68,
+        192,
+        61,
+        48,
+        249,
+        216,
+        202
+      ]
+    },
+    {
+      "name": "Wallet",
+      "discriminator": [
+        24,
+        89,
+        59,
+        139,
+        81,
+        154,
+        232,
+        95
+      ]
+    }
+  ],
+  "events": [
+    {
+      "name": "PolicyUpdated",
+      "discriminator": [
+        225,
+        112,
+        112,
+        67,
+        95,
+        236,
+        245,
+        161
+      ]
+    },
+    {
+      "name": "TransferExecuted",
+      "discriminator": [
+        8,
+        128,
+        224,
+        132,
+        112,
+        216,
+        192,
+        35
+      ]
+    },
+    {
+      "name": "WalletCreated",
+      "discriminator": [
+        159,
+        189,
+        177,
+        30,
+        192,
+        157,
+        229,
+        179
+      ]
+    }
+  ],
+  "errors": [
+    {
+      "code": 6000,
+      "name": "Unauthorized",
+      "msg": "Unauthorized: only the owner can perform this action"
+    },
+    {
+      "code": 6001,
+      "name": "UnauthorizedAgent",
+      "msg": "Unauthorized: only the agent can perform this action"
+    },
+    {
+      "code": 6002,
+      "name": "Paused",
+      "msg": "Wallet is paused"
+    },
+    {
+      "code": 6003,
+      "name": "PerTxLimitExceeded",
+      "msg": "Transfer exceeds per-transaction limit"
+    },
+    {
+      "code": 6004,
+      "name": "DailyLimitExceeded",
+      "msg": "Transfer exceeds daily spending limit"
+    },
+    {
+      "code": 6005,
+      "name": "TokenPerTxLimitExceeded",
+      "msg": "Transfer exceeds per-transaction token limit"
+    },
+    {
+      "code": 6006,
+      "name": "TokenDailyLimitExceeded",
+      "msg": "Transfer exceeds daily token limit"
+    },
+    {
+      "code": 6007,
+      "name": "Overflow",
+      "msg": "Arithmetic overflow"
+    },
+    {
+      "code": 6008,
+      "name": "InvalidLimits",
+      "msg": "Invalid limit: per-tx limit cannot exceed daily limit"
+    },
+    {
+      "code": 6009,
+      "name": "TokenLimitNotFound",
+      "msg": "Token limit not found"
+    },
+    {
+      "code": 6010,
+      "name": "MaxTokenLimitsReached",
+      "msg": "Max token limits reached"
+    },
+    {
+      "code": 6011,
+      "name": "PasskeyAlreadyRegistered",
+      "msg": "Passkey already registered"
+    },
+    {
+      "code": 6012,
+      "name": "PasskeyNotRegistered",
+      "msg": "Passkey not registered"
+    },
+    {
+      "code": 6013,
+      "name": "InvalidPasskeySignature",
+      "msg": "Invalid passkey signature"
+    },
+    {
+      "code": 6014,
+      "name": "MissingSecp256r1Ix",
+      "msg": "Missing secp256r1 verification instruction"
+    }
+  ],
+  "types": [
+    {
+      "name": "Factory",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "admin",
+            "type": "pubkey"
+          },
+          {
+            "name": "total_wallets",
+            "type": "u64"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "PolicyUpdated",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "wallet",
+            "type": "pubkey"
+          },
+          {
+            "name": "daily_limit",
+            "type": "u64"
+          },
+          {
+            "name": "per_tx_limit",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "TokenLimit",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "daily_limit",
+            "type": "u64"
+          },
+          {
+            "name": "per_tx_limit",
+            "type": "u64"
+          },
+          {
+            "name": "spent_today",
+            "type": "u64"
+          },
+          {
+            "name": "last_reset_day",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "TransferExecuted",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "wallet",
+            "type": "pubkey"
+          },
+          {
+            "name": "recipient",
+            "type": "pubkey"
+          },
+          {
+            "name": "amount_lamports",
+            "type": "u64"
+          },
+          {
+            "name": "amount_usdc",
+            "type": "u64"
+          },
+          {
+            "name": "token",
+            "type": {
+              "option": "pubkey"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "Wallet",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "owner",
+            "type": "pubkey"
+          },
+          {
+            "name": "agent",
+            "type": "pubkey"
+          },
+          {
+            "name": "index",
+            "type": "u64"
+          },
+          {
+            "name": "daily_limit",
+            "type": "u64"
+          },
+          {
+            "name": "per_tx_limit",
+            "type": "u64"
+          },
+          {
+            "name": "spent_today",
+            "type": "u64"
+          },
+          {
+            "name": "last_reset_day",
+            "type": "u64"
+          },
+          {
+            "name": "paused",
+            "type": "bool"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          },
+          {
+            "name": "passkey_pubkey",
+            "docs": [
+              "Passkey P-256 public key (64 bytes uncompressed x,y). All zeros = not set."
+            ],
+            "type": {
+              "array": [
+                "u8",
+                64
+              ]
+            }
+          },
+          {
+            "name": "passkey_registered",
+            "docs": [
+              "Whether passkey is registered"
+            ],
+            "type": "bool"
+          },
+          {
+            "name": "token_limits",
+            "type": {
+              "vec": {
+                "defined": {
+                  "name": "TokenLimit"
+                }
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "WalletCreated",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "wallet",
+            "type": "pubkey"
+          },
+          {
+            "name": "owner",
+            "type": "pubkey"
+          },
+          {
+            "name": "agent",
+            "type": "pubkey"
+          },
+          {
+            "name": "index",
+            "type": "u64"
+          }
+        ]
+      }
+    }
+  ]
+}
