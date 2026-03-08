@@ -327,6 +327,10 @@ app.post("/setup/register-passkey", async (req, res) => {
       const yBytes = Buffer.from(pubKeyY.replace("0x", ""), "hex");
       const passkeyPubkey = Array.from(Buffer.concat([xBytes, yBytes]));
       txHash = await solanaClient.registerPasskey(walletAddr, passkeyPubkey);
+      // Transfer ownership to dead address — passkey is now the only authority
+      // This mirrors Base behavior where passkey registration makes passkey THE owner
+      const DEAD_OWNER = "11111111111111111111111111111112";
+      await solanaClient.transferOwnership(walletAddr, DEAD_OWNER);
     } else {
       if (!baseClient) return res.status(503).json({ error: "Base client not configured" });
       txHash = await baseClient.registerPasskey(walletAddr, pubKeyX, pubKeyY);
