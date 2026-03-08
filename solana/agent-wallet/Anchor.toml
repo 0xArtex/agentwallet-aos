@@ -6,7 +6,7 @@ resolution = true
 skip-lint = false
 
 [programs.localnet]
-agent_wallet = "Gfw7VAtTN8uQsWpnscDDMmnxPLhFLtsAvCWADdGjpTcq"
+agent_wallet = "4XHYgv4fczfAtkKB792yrP57iakR9extKtkigsXCJm5e"
 
 [registry]
 url = "https://api.apr.dev"
