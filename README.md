@@ -1,11 +1,15 @@
 # AgentWallet
 
-Non-custodial, gas-sponsored smart wallets for AI agents on Base.
+Non-custodial smart wallets for AI agents on **Base** and **Solana**.
 
 Your agent gets a real wallet with free gas, spending limits, and human control via FaceID — all enforced by smart contracts, not trust.
 
 ```bash
+# Base
 npx @agntos/agentwallet create --agent 0xYourAgentAddress
+
+# Solana
+npx @agntos/agentwallet create --chain solana --agent YourSolanaPubkey
 ```
 
 ## Why
@@ -13,8 +17,9 @@ npx @agntos/agentwallet create --agent 0xYourAgentAddress
 AI agents need to spend money. But giving an agent an unlimited wallet is terrifying.
 
 **AgentWallet** solves this:
-- **Gas-sponsored** — every wallet gets free gas on creation. Your agent can transact immediately, no ETH needed for fees
-- **Hard spending limits** — $50/day, $25/tx by default, enforced by the smart contract
+- **Multi-chain** — Base (EVM) and Solana, same security model on both
+- **Gas-sponsored** — every wallet gets free gas on creation. Transact immediately, no ETH/SOL needed for fees
+- **Hard spending limits** — $50/day, $25/tx by default, enforced onchain
 - **Human oversight** — passkey (FaceID/YubiKey) controls limits, pause, and withdrawals
 - **Non-custodial** — agent's private key never leaves the agent's machine. We literally cannot touch your funds.
 
@@ -34,6 +39,8 @@ Agent creates wallet → Human registers passkey → Agent transacts within limi
 
 ### Limit tracking
 
+#### Base
+
 | Asset | Tracking | Limits |
 |-------|----------|--------|
 | **ETH** | Converted to USD via Chainlink oracle | Shared USD daily/per-tx limit |
@@ -41,6 +48,15 @@ Agent creates wallet → Human registers passkey → Agent transacts within limi
 | **Other ERC-20s** | Unlimited by default | Owner can set per-token limits |
 
 ETH and USDC spending is **aggregated** — if the daily limit is $50, spending $30 in ETH leaves $20 for USDC (and vice versa).
+
+#### Solana
+
+| Asset | Tracking | Limits |
+|-------|----------|--------|
+| **SOL** | USD amount passed by agent | Shared USD daily/per-tx limit |
+| **SPL tokens** | Per-token tracking | Up to 16 tokens with individual limits |
+
+Limits are USD-denominated (6 decimals). Daily spending resets based on `unix_timestamp / 86400`.
 
 ### Wallet modes
 
@@ -53,7 +69,7 @@ ETH and USDC spending is **aggregated** — if the daily limit is $50, spending 
 
 ### Step 1: Generate an agent keypair
 
-Your agent needs an EVM keypair. The **public address** identifies your agent on-chain. The **private key** is what your agent uses to sign transactions from the wallet.
+#### Base (EVM)
 
 ```bash
 npx @agntos/agentwallet keygen
@@ -64,50 +80,59 @@ npx @agntos/agentwallet keygen
   ─────────────────────
   Address         0xB042...B7DC
   Private key     0x282a...b3a3
-
-  Save the private key securely — your agent needs it to sign transactions.
-  Never share it. Never commit it to git.
-
-  Create a wallet with this key:
-  $ agentwallet create --agent 0xB042...B7DC
 ```
 
-> **Already have a keypair?** If your agent uses ethers.js, viem, or any EVM library, you already have one. Use that public address as `--agent`.
+#### Solana
+
+```bash
+npx @agntos/agentwallet keygen --chain solana
+```
+
+```
+  New Agent Keypair (Solana)
+  ─────────────────────────
+  Address         7Kp9...xR4v
+  Private key     4vJ2...9mNq
+```
+
+> **Already have a keypair?** Use your existing public address — works with ethers.js, viem, @solana/web3.js, or any wallet library.
 
 ### Step 2: Create a wallet
 
 ```bash
-# Managed — human registers passkey to control limits
+# Base — managed
 npx @agntos/agentwallet create --agent 0xYourAgentAddress
 
-# Unmanaged — fully autonomous, no human needed
-npx @agntos/agentwallet create --agent 0xYourAgentAddress --unmanaged
+# Solana — managed
+npx @agntos/agentwallet create --chain solana --agent YourSolanaPubkey
+
+# Either chain — unmanaged (fully autonomous)
+npx @agntos/agentwallet create --agent 0x... --unmanaged
+npx @agntos/agentwallet create --chain solana --agent PUBKEY --unmanaged
 ```
 
 For managed wallets, you'll get a **setup URL**. Send it to your human. They open it, set spending limits, and register their passkey (FaceID/fingerprint/YubiKey). That's the one-time setup.
 
-Every wallet gets **free gas** on creation (~$0.07, enough for ~140 transactions on Base).
+Every wallet gets **free gas** on creation.
 
 ### Step 3: Fund the wallet
 
-Send ETH and/or USDC to the wallet address on **Base** (chain ID 8453). Any standard transfer works. Your agent doesn't need to hold ETH for gas — it's already funded and ready to go.
+- **Base:** Send ETH and/or USDC to the wallet address on Base (chain ID 8453)
+- **Solana:** Send SOL and/or SPL tokens to the wallet PDA on Solana
 
 ### Step 4: Transact
 
-Your agent calls the wallet contract directly using its private key:
+#### Base
 
 ```typescript
 import { Wallet, Contract, JsonRpcProvider, parseEther } from 'ethers'
 
-// Your agent's private key (from step 1)
 const AGENT_KEY = '0x282a...'
-// Your wallet address (from step 2)
 const WALLET = '0x...'
 
 const provider = new JsonRpcProvider('https://base-rpc.publicnode.com')
 const agent = new Wallet(AGENT_KEY, provider)
 
-// Minimal ABI — only the functions your agent needs
 const wallet = new Contract(WALLET, [
   'function execute(address to, uint256 value, bytes data) external',
   'function executeERC20(address token, address to, uint256 amount) external',
@@ -116,32 +141,63 @@ const wallet = new Contract(WALLET, [
 ], agent)
 
 // Send ETH
-await wallet.execute(
-  '0xRecipientAddress',  // to
-  parseEther('0.001'),   // value in wei
-  '0x'                   // empty data for simple transfer
-)
+await wallet.execute('0xRecipient', parseEther('0.001'), '0x')
 
 // Send USDC (6 decimals)
 const USDC = '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913'
 await wallet.executeERC20(USDC, '0xRecipient', 5_000_000n) // 5 USDC
 
-// Call any contract (e.g. swap on Uniswap)
-const swapData = '0x...' // encoded function call
-await wallet.execute('0xRouterAddress', parseEther('0.01'), swapData)
-
 // Check remaining budget
-const remaining = await wallet.getRemainingDaily() // in USDC units (6 decimals)
+const remaining = await wallet.getRemainingDaily()
 console.log(`Remaining today: $${Number(remaining) / 1e6}`)
 ```
 
-Every transaction is checked against your spending limits on-chain. If it exceeds the daily or per-tx limit, it **reverts instantly** — no approval queue, no waiting.
+#### Solana
+
+```typescript
+import { Program, AnchorProvider } from '@coral-xyz/anchor'
+import { Connection, Keypair, PublicKey } from '@solana/web3.js'
+import BN from 'bn.js'
+
+const connection = new Connection('https://api.devnet.solana.com')
+const agentKeypair = Keypair.fromSecretKey(bs58.decode(AGENT_PRIVATE_KEY))
+
+// Transfer SOL
+await program.methods
+  .transferSol(new BN(amountUsdc), new BN(amountLamports))
+  .accounts({
+    wallet: walletPda,
+    agent: agentKeypair.publicKey,
+    recipient: recipientPubkey
+  })
+  .signers([agentKeypair])
+  .rpc()
+
+// Transfer SPL token
+await program.methods
+  .transferToken(new BN(tokenAmount), new BN(amountUsdc))
+  .accounts({
+    wallet: walletPda,
+    agent: agentKeypair.publicKey,
+    mint: mintPubkey,
+    walletTokenAccount,
+    recipientTokenAccount,
+    tokenProgram: TOKEN_PROGRAM_ID
+  })
+  .signers([agentKeypair])
+  .rpc()
+```
+
+Every transaction is checked against spending limits onchain. Exceeds the limit? **Reverts instantly.**
 
 ### Step 5: Check your wallet
 
 ```bash
-npx @agntos/agentwallet status 0xYourWallet
+npx @agntos/agentwallet status 0xYourWallet       # Base
+npx @agntos/agentwallet status YourSolanaWallet    # Solana
 ```
+
+Auto-detects chain by address format (`0x` = Base, base58 = Solana).
 
 ```
   Wallet
@@ -169,10 +225,12 @@ Returns a URL. Send it to your human → they review → authenticate with passk
 ## All Commands
 
 ```bash
-npx @agntos/agentwallet keygen                        # generate agent keypair
-npx @agntos/agentwallet create --agent 0x...          # managed wallet
+npx @agntos/agentwallet keygen                        # generate Base keypair
+npx @agntos/agentwallet keygen --chain solana          # generate Solana keypair
+npx @agntos/agentwallet create --agent 0x...          # managed wallet (Base)
+npx @agntos/agentwallet create --chain solana --agent PUBKEY  # managed wallet (Solana)
 npx @agntos/agentwallet create --agent 0x... --unmanaged  # autonomous wallet
-npx @agntos/agentwallet status 0xWALLET               # wallet info + balances
+npx @agntos/agentwallet status 0xWALLET               # wallet info (auto-detects chain)
 npx @agntos/agentwallet limits 0xWALLET --daily 200 --pertx 100
 npx @agntos/agentwallet token-limit 0xWALLET --token 0xTOKEN --token-daily 1000 --token-pertx 300
 npx @agntos/agentwallet rm-token 0xWALLET --token 0xTOKEN
@@ -187,9 +245,8 @@ All commands support `--json` for machine-readable output.
 
 ### Architecture
 
-- **AgentWallet** — minimal proxy (EIP-1167) smart wallet with dual-mode ownership (EOA or passkey)
-- **AgentWalletFactory** — deploys wallets via CREATE2 (deterministic addresses), seeds gas
-- **PasskeyVerifier** — on-chain P-256 signature verification via RIP-7212 precompile
+- **Base:** Minimal proxy (EIP-1167) smart wallet with dual-mode ownership (EOA or passkey). Factory deploys via CREATE2 (deterministic addresses), seeds gas. PasskeyVerifier uses RIP-7212 precompile.
+- **Solana:** Anchor program with PDA wallets (seeds: `["wallet", owner, agent, index]`). Passkey verified via secp256r1 precompile (P-256). Up to 16 per-token spending limits.
 
 ### Deployments
 
@@ -208,14 +265,26 @@ All commands support `--json` for machine-readable output.
 | Implementation | `0xFB93e5245303827426Fb1A40D9168Cb738de1F2f` |
 | Mock Oracle | `0x65E246C24118CF6439152d725Ad0072ce469805c` |
 
+**Solana Devnet**
+| Item | Address |
+|------|---------|
+| Program | [`4XHYgv4fczfAtkKB792yrP57iakR9extKtkigsXCJm5e`](https://explorer.solana.com/address/4XHYgv4fczfAtkKB792yrP57iakR9extKtkigsXCJm5e?cluster=devnet) |
+| IDL Account | [`6tEPFHmaaDMH2rth1jPWyvDDxh6GcZhkAEj9kKTCY9k6`](https://explorer.solana.com/address/6tEPFHmaaDMH2rth1jPWyvDDxh6GcZhkAEj9kKTCY9k6?cluster=devnet) |
+
 ## Security Model
 
 1. **Agent key** — can execute transactions within policy limits only
 2. **Owner (passkey)** — can change limits, pause, blacklist, withdraw. Private key lives in device secure enclave (never exported)
-3. **Backend** — relays passkey-signed transactions to chain. Cannot forge signatures. If compromised, on-chain limits still hold.
-4. **Oracle** — Chainlink ETH/USD feed (8 decimals, aggregated from multiple sources). 1-hour staleness check prevents stale price exploitation.
+3. **Irrevocable handoff** — after passkey registration, admin loses control permanently
+   - Base: owner set to zero address
+   - Solana: owner transferred to dead address `11111111111111111111111111111112`
+4. **Backend** — relays passkey-signed transactions to chain. Cannot forge signatures. If compromised, on-chain limits still hold
+5. **Oracle** (Base) — Chainlink ETH/USD feed (8 decimals, aggregated from multiple sources). 1-hour staleness check
+6. **Passkey verification**
+   - Base: RIP-7212 precompile (P-256)
+   - Solana: secp256r1 precompile (P-256)
 
-The backend is a **convenience layer** — all security-critical logic is on-chain. An agent can interact with the contracts directly, bypassing the API entirely.
+The backend is a **convenience layer** — all security-critical logic is onchain. An agent can interact with the contracts directly, bypassing the API entirely.
 
 ## Other Ways to Use AgentWallet
 
@@ -223,7 +292,7 @@ The CLI is the recommended way. But you can also:
 
 - **SDK** — `import { AgentWallet } from '@agntos/agentwallet'` for programmatic use in Node.js/TypeScript
 - **REST API** — `POST https://agntos.dev/wallet/wallet` for direct HTTP calls
-- **Direct contract calls** — interact with the smart contracts on Base without any middleware
+- **Direct contract calls** — interact with the smart contracts on Base or Solana without any middleware
 
 See the [SKILL.md](SKILL.md) for full API reference.
 
@@ -238,6 +307,8 @@ FACTORY_ADDRESS=0x77c2a63BB08b090b46eb612235604dEB8150A4A1 \
 BASE_RPC=https://base-rpc.publicnode.com \
 ETH_USD_ORACLE=0x71041dddad3595F9CEd3DcCFBe3D1F4b0a16Bb70 \
 USDC_ADDRESS=0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913 \
+SOLANA_RPC=https://api.devnet.solana.com \
+SOLANA_PROGRAM_ID=4XHYgv4fczfAtkKB792yrP57iakR9extKtkigsXCJm5e \
 node dist/api/server.js
 ```
 
@@ -248,9 +319,10 @@ Then: `npx @agntos/agentwallet create --agent 0x... --url http://localhost:3002`
 ```
 cli/                          ← npm package (@agntos/agentwallet)
 contracts/base/               ← Solidity smart contracts (45 Forge tests)
-contracts/solana/             ← Solana program (coming soon)
+contracts/solana/             ← Anchor program (Solana)
 src/api/                      ← REST API server
 src/base/                     ← Base wallet client + ABIs
+src/solana/                   ← Solana wallet client
 src/web/                      ← Passkey setup + approval pages
 docs/                         ← Architecture diagram
 ```
