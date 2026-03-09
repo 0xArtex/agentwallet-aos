@@ -17,7 +17,7 @@ const c = {
   orange: '\x1b[38;5;208m',
 }
 
-const VERSION = '1.1.0'
+const VERSION = '1.2.0'
 
 // ─── Parse args ───
 function parse(argv: string[]) {
@@ -82,7 +82,7 @@ function link(url: string) {
 function help() {
   console.log(`
 ${c.orange}${c.bold}agentwallet${c.reset} ${c.dim}v${VERSION}${c.reset}
-Non-custodial smart wallets for AI agents on Base
+Non-custodial smart wallets for AI agents on Base and Solana
 
 ${c.bold}Commands${c.reset}
   ${c.cyan}create${c.reset}              Create a new wallet
@@ -96,7 +96,9 @@ ${c.bold}Commands${c.reset}
   ${c.cyan}stats${c.reset}               Total wallets deployed
 
 ${c.bold}Options${c.reset}
-  ${c.yellow}--agent${c.reset} ${c.dim}<addr>${c.reset}      Agent's EVM public address (the key that signs transactions)
+  ${c.yellow}--agent${c.reset} ${c.dim}<addr>${c.reset}      Agent's Base (EVM) public address
+  ${c.yellow}--agent-sol${c.reset} ${c.dim}<addr>${c.reset}  Agent's Solana public address
+  ${c.yellow}--chain${c.reset} ${c.dim}<chain>${c.reset}     Chain: base, solana, or both (default: both)
   ${c.yellow}--daily${c.reset} ${c.dim}<usd>${c.reset}       Daily limit in USD
   ${c.yellow}--pertx${c.reset} ${c.dim}<usd>${c.reset}       Per-transaction limit in USD
   ${c.yellow}--token${c.reset} ${c.dim}<addr>${c.reset}      Token contract address
@@ -104,7 +106,6 @@ ${c.bold}Options${c.reset}
   ${c.yellow}--token-pertx${c.reset} ${c.dim}<n>${c.reset}   Token per-tx limit
   ${c.yellow}--decimals${c.reset} ${c.dim}<n>${c.reset}      Token decimals (default: 18)
   ${c.yellow}--reason${c.reset} ${c.dim}<text>${c.reset}     Reason for the request
-  ${c.yellow}--chain${c.reset} ${c.dim}<chain>${c.reset}     Chain: base (default) or solana
   ${c.yellow}--unmanaged${c.reset}         Create without human owner
   ${c.yellow}--url${c.reset} ${c.dim}<url>${c.reset}         API base URL
   ${c.yellow}--json${c.reset}             Output raw JSON
@@ -112,25 +113,27 @@ ${c.bold}Options${c.reset}
   ${c.yellow}--help${c.reset}             Show this help
 
 ${c.bold}Examples${c.reset}
-  ${c.dim}# Create a managed wallet (human sets up passkey)${c.reset}
-  ${c.dim}# --agent is your EVM public address (the key your agent uses to sign txs)${c.reset}
-  ${c.green}$${c.reset} agentwallet create --agent 0xYourAgentPublicAddress
+  ${c.dim}# Generate keypairs for both chains${c.reset}
+  ${c.green}$${c.reset} agentwallet keygen
 
-  ${c.dim}# Create an autonomous wallet (no human)${c.reset}
-  ${c.green}$${c.reset} agentwallet create --agent 0xYourAgentPublicAddress --unmanaged
+  ${c.dim}# Create wallets on both chains (recommended)${c.reset}
+  ${c.green}$${c.reset} agentwallet create --agent 0xEvmAddress --agent-sol SolanaAddress
 
-  ${c.dim}# Check your wallet${c.reset}
-  ${c.green}$${c.reset} agentwallet status 0xWallet...
+  ${c.dim}# Create on a single chain${c.reset}
+  ${c.green}$${c.reset} agentwallet create --chain base --agent 0xEvmAddress
+  ${c.green}$${c.reset} agentwallet create --chain solana --agent SolanaPubkey
+
+  ${c.dim}# Check your wallet (auto-detects chain)${c.reset}
+  ${c.green}$${c.reset} agentwallet status 0xBaseWallet...
+  ${c.green}$${c.reset} agentwallet status SolanaWallet...
 
   ${c.dim}# Need higher limits? Ask your human${c.reset}
   ${c.green}$${c.reset} agentwallet limits 0xWallet... --daily 200 --pertx 100
 
-  ${c.dim}# Cap exposure on a specific token${c.reset}
-  ${c.green}$${c.reset} agentwallet token-limit 0xWallet... --token 0xToken... --token-daily 1000 --token-pertx 300
-
 ${c.bold}Environment${c.reset}
-  ${c.yellow}AGENTWALLET_URL${c.reset}    API endpoint (default: https://agntos.dev/wallet)
-  ${c.yellow}AGENTWALLET_AGENT${c.reset}  Default agent address
+  ${c.yellow}AGENTWALLET_URL${c.reset}        API endpoint (default: https://agntos.dev/wallet)
+  ${c.yellow}AGENTWALLET_AGENT${c.reset}      Default Base agent address
+  ${c.yellow}AGENTWALLET_AGENT_SOL${c.reset}  Default Solana agent address
 
 ${c.dim}Docs: https://github.com/0xArtex/agentwallet-aos${c.reset}
 ${c.dim}npm:  https://www.npmjs.com/package/@agntos/agentwallet${c.reset}
@@ -139,47 +142,83 @@ ${c.dim}npm:  https://www.npmjs.com/package/@agntos/agentwallet${c.reset}
 
 // ─── Commands ───
 
-async function cmdCreate(aw: AgentWallet, flags: Record<string, string | boolean>) {
-  const agent = (flags.agent as string) || process.env.AGENTWALLET_AGENT || ''
-  if (!agent) {
-    console.error(`
-  ${c.red}✗${c.reset} --agent <address> is required
-
-  ${c.dim}This is your agent's EVM public address — the key it uses to sign transactions.${c.reset}
-
-  ${c.dim}Don't have one? Generate a keypair:${c.reset}
-  ${c.green}$${c.reset} agentwallet keygen
-
-  ${c.dim}Or set it as an env var:${c.reset}
-  ${c.green}$${c.reset} export AGENTWALLET_AGENT=0xYourAddress
-`)
-    process.exit(1)
-  }
-
-  const chain = (flags.chain as string || 'base') as 'base' | 'solana'
-  const data = flags.unmanaged
-    ? await aw.createUnmanaged(agent!, chain)
-    : await aw.create(agent!, chain)
-
-  if (flags.json) return console.log(JSON.stringify(data, null, 2))
-
+function printWallet(data: any, chainLabel: string) {
   const w = data.wallet
-  header(flags.unmanaged ? 'Wallet created (unmanaged)' : 'Wallet created')
+  const gasUnit = w.chain === 'solana' ? 'SOL' : 'ETH'
+  const gasDivisor = w.chain === 'solana' ? 1e9 : 1e18
+  console.log(`\n  ${c.cyan}${chainLabel}${c.reset}`)
   row('Address', w.address, c.bold + c.white)
   row('Agent', w.agent)
   row('Mode', data.mode, data.mode === 'managed' ? c.yellow : c.green)
   row('Daily limit', `$${Number(w.policy.dailyLimit) / 1e6}`)
   row('Per-tx limit', `$${Number(w.policy.perTxLimit) / 1e6}`)
-  const gasUnit = w.chain === 'solana' ? 'SOL' : 'ETH'
-  const gasDivisor = w.chain === 'solana' ? 1e9 : 1e18
   row('Gas funded', `${Number(w.gasBalance) / gasDivisor} ${gasUnit}`, c.green)
-
   if (data.setupUrl) {
-    console.log()
-    console.log(`  ${c.bold}Setup URL${c.reset} ${c.dim}(send to your human to register passkey)${c.reset}`)
-    console.log(`  ${c.cyan}${data.setupUrl}${c.reset}`)
+    console.log(`  ${c.gray}Setup URL${c.reset}       ${c.cyan}${data.setupUrl}${c.reset}`)
   }
-  console.log()
+}
+
+async function cmdCreate(aw: AgentWallet, flags: Record<string, string | boolean>) {
+  const chain = flags.chain as string | undefined
+  const agentBase = (flags.agent as string) || process.env.AGENTWALLET_AGENT || ''
+  const agentSol = (flags['agent-sol'] as string) || process.env.AGENTWALLET_AGENT_SOL || ''
+
+  // Single chain mode
+  if (chain === 'base' || chain === 'solana') {
+    const agent = chain === 'solana' ? (agentSol || agentBase) : agentBase
+    if (!agent) {
+      error(`--agent <address> is required\n\n  Generate keypairs: agentwallet keygen --chain ${chain}`)
+    }
+    const data = flags.unmanaged ? await aw.createUnmanaged(agent, chain) : await aw.create(agent, chain)
+    if (flags.json) return console.log(JSON.stringify(data, null, 2))
+    header(flags.unmanaged ? 'Wallet created (unmanaged)' : 'Wallet created')
+    printWallet(data, chain === 'solana' ? 'SOLANA' : 'BASE (EVM)')
+    console.log()
+    return
+  }
+
+  // Default: create BOTH wallets
+  if (!agentBase && !agentSol) {
+    console.error(`
+  ${c.red}✗${c.reset} Agent addresses required
+
+  ${c.dim}Provide both chain addresses:${c.reset}
+  ${c.green}$${c.reset} agentwallet create --agent 0xEvmAddress --agent-sol SolanaAddress
+
+  ${c.dim}Or create for a single chain:${c.reset}
+  ${c.green}$${c.reset} agentwallet create --chain base --agent 0xEvmAddress
+  ${c.green}$${c.reset} agentwallet create --chain solana --agent SolanaAddress
+
+  ${c.dim}Generate keypairs for both chains:${c.reset}
+  ${c.green}$${c.reset} agentwallet keygen
+`)
+    process.exit(1)
+  }
+
+  const results: any = {}
+  const errors: string[] = []
+
+  if (agentBase) {
+    try {
+      results.base = flags.unmanaged ? await aw.createUnmanaged(agentBase, 'base') : await aw.create(agentBase, 'base')
+    } catch (e: any) { errors.push(`Base: ${e.message}`) }
+  }
+  if (agentSol) {
+    try {
+      results.solana = flags.unmanaged ? await aw.createUnmanaged(agentSol, 'solana') : await aw.create(agentSol, 'solana')
+    } catch (e: any) { errors.push(`Solana: ${e.message}`) }
+  }
+
+  if (!results.base && !results.solana) error(errors.join('\n'))
+
+  if (flags.json) return console.log(JSON.stringify(results, null, 2))
+
+  header(flags.unmanaged ? 'Wallets created (unmanaged)' : 'Wallets created')
+  if (results.base) printWallet(results.base, 'BASE (EVM)')
+  if (results.solana) printWallet(results.solana, 'SOLANA')
+  if (errors.length) { console.log(); errors.forEach(e => console.log(`  ${c.red}✗${c.reset} ${e}`)) }
+
+  console.log(`\n  ${c.dim}Send the setup URLs to your human to register passkeys.${c.reset}\n`)
 }
 
 async function cmdStatus(aw: AgentWallet, positional: string[], flags: Record<string, string | boolean>) {
@@ -286,69 +325,75 @@ async function cmdUnpause(aw: AgentWallet, positional: string[], flags: Record<s
   link(data.approvalUrl)
 }
 
-async function cmdKeygen(flags: Record<string, string | boolean>) {
-  const chain = (flags.chain as string) || 'base'
-
-  if (chain === 'solana') {
-    // Use Node.js built-in Ed25519 keygen
-    const cryptoMod = await import('crypto')
-    const { publicKey: pubKeyObj, privateKey: privKeyObj } = cryptoMod.generateKeyPairSync('ed25519', {
-      publicKeyEncoding: { type: 'spki', format: 'der' },
-      privateKeyEncoding: { type: 'pkcs8', format: 'der' },
-    })
-    // Ed25519 DER public key: last 32 bytes; DER private key: last 32 bytes of seed
-    const pubBytes = (pubKeyObj as Buffer).subarray(-32)
-    const privBytes = (privKeyObj as Buffer).subarray(-32)
-    // Solana keypair = 64 bytes (privkey seed + pubkey)
-    const fullSecret = Buffer.concat([privBytes, pubBytes])
-    const address = base58Encode(pubBytes)
-    const privateKey = base58Encode(fullSecret)
-
-    if (flags.json) {
-      console.log(JSON.stringify({ address, privateKey, chain: 'solana' }))
-      return
-    }
-
-    header('New Solana Agent Keypair')
-    row('Address', address, c.bold + c.white)
-    row('Private key', privateKey, c.yellow)
-    row('Chain', 'solana', c.cyan)
-    console.log()
-    console.log(`  ${c.dim}Save the private key securely — your agent needs it to sign transactions.${c.reset}`)
-    console.log(`  ${c.dim}Never share it. Never commit it to git.${c.reset}`)
-    console.log()
-    console.log(`  ${c.dim}Create a wallet with this key:${c.reset}`)
-    console.log(`  ${c.green}$${c.reset} agentwallet create --agent ${address} --chain solana`)
-    console.log()
-    return
-  }
-
-  // Default: EVM keygen
-  const crypto = await import('crypto')
-  const privBytes = crypto.randomBytes(32)
+async function genEvmKey() {
+  const cryptoMod = await import('crypto')
+  const privBytes = cryptoMod.randomBytes(32)
   const privKey = '0x' + privBytes.toString('hex')
-
-  // Derive address: secp256k1 pubkey → keccak256 → last 20 bytes
-  const ecdh = crypto.createECDH('secp256k1')
+  const ecdh = cryptoMod.createECDH('secp256k1')
   ecdh.setPrivateKey(privBytes)
-  const pubBytes = ecdh.getPublicKey().subarray(1) // remove 0x04 prefix
+  const pubBytes = ecdh.getPublicKey().subarray(1)
   const hash = keccak256(pubBytes)
   const address = '0x' + toChecksumAddress(hash.subarray(12))
+  return { address, privateKey: privKey, chain: 'base' as const }
+}
 
-  if (flags.json) {
-    console.log(JSON.stringify({ address, privateKey: privKey, chain: 'base' }))
+async function genSolKey() {
+  const cryptoMod = await import('crypto')
+  const { publicKey: pubKeyObj, privateKey: privKeyObj } = cryptoMod.generateKeyPairSync('ed25519', {
+    publicKeyEncoding: { type: 'spki', format: 'der' },
+    privateKeyEncoding: { type: 'pkcs8', format: 'der' },
+  })
+  const pubBytes = (pubKeyObj as Buffer).subarray(-32)
+  const privBytes = (privKeyObj as Buffer).subarray(-32)
+  const fullSecret = Buffer.concat([privBytes, pubBytes])
+  return { address: base58Encode(pubBytes), privateKey: base58Encode(fullSecret), chain: 'solana' as const }
+}
+
+async function cmdKeygen(flags: Record<string, string | boolean>) {
+  const chain = flags.chain as string | undefined
+
+  if (chain === 'base') {
+    const k = await genEvmKey()
+    if (flags.json) { console.log(JSON.stringify(k)); return }
+    header('New Base Agent Keypair')
+    row('Address', k.address, c.bold + c.white)
+    row('Private key', k.privateKey, c.yellow)
+    row('Chain', 'base', c.cyan)
+    console.log(`\n  ${c.dim}Create a wallet:${c.reset}\n  ${c.green}$${c.reset} agentwallet create --chain base --agent ${k.address}\n`)
     return
   }
 
-  header('New Agent Keypair')
-  row('Address', address, c.bold + c.white)
-  row('Private key', privKey, c.yellow)
+  if (chain === 'solana') {
+    const k = await genSolKey()
+    if (flags.json) { console.log(JSON.stringify(k)); return }
+    header('New Solana Agent Keypair')
+    row('Address', k.address, c.bold + c.white)
+    row('Private key', k.privateKey, c.yellow)
+    row('Chain', 'solana', c.cyan)
+    console.log(`\n  ${c.dim}Create a wallet:${c.reset}\n  ${c.green}$${c.reset} agentwallet create --chain solana --agent ${k.address}\n`)
+    return
+  }
+
+  // Default: generate BOTH keypairs
+  const base = await genEvmKey()
+  const sol = await genSolKey()
+
+  if (flags.json) { console.log(JSON.stringify({ base, solana: sol })); return }
+
+  header('New Agent Keypairs')
   console.log()
-  console.log(`  ${c.dim}Save the private key securely — your agent needs it to sign transactions.${c.reset}`)
-  console.log(`  ${c.dim}Never share it. Never commit it to git.${c.reset}`)
+  console.log(`  ${c.cyan}BASE (EVM)${c.reset}`)
+  row('Address', base.address, c.bold + c.white)
+  row('Private key', base.privateKey, c.yellow)
   console.log()
-  console.log(`  ${c.dim}Create a wallet with this key:${c.reset}`)
-  console.log(`  ${c.green}$${c.reset} agentwallet create --agent ${address}`)
+  console.log(`  ${c.cyan}SOLANA${c.reset}`)
+  row('Address', sol.address, c.bold + c.white)
+  row('Private key', sol.privateKey, c.yellow)
+  console.log()
+  console.log(`  ${c.dim}Save both private keys securely. Never share them.${c.reset}`)
+  console.log()
+  console.log(`  ${c.dim}Create wallets on both chains:${c.reset}`)
+  console.log(`  ${c.green}$${c.reset} agentwallet create --agent ${base.address} --agent-sol ${sol.address}`)
   console.log()
 }
 

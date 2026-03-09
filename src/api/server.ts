@@ -15,6 +15,13 @@ app.use(express.json());
 // Setup tokens: token → {walletAddress, agentAddress, chain, createdAt}
 const setupTokens = new Map<string, { wallet: string; agent: string; chain: string; createdAt: number }>();
 
+function walletMatch(a: string, b: string): boolean {
+  if (a === b) return true;
+  // Only lowercase-compare for EVM hex addresses
+  if (a.startsWith("0x") && b.startsWith("0x")) return a.toLowerCase() === b.toLowerCase();
+  return false;
+}
+
 // Wallet credential IDs: walletAddress → credentialId (base64) — persisted to disk
 const CREDS_FILE = join(dirname(fileURLToPath(import.meta.url)), "../../../data/credentials.json");
 
@@ -344,7 +351,7 @@ app.post("/setup/register-passkey", async (req, res) => {
   }
 
   const setup = setupTokens.get(token);
-  if (!setup || setup.wallet.toLowerCase() !== walletAddr.toLowerCase()) {
+  if (!setup || !walletMatch(setup.wallet, walletAddr)) {
     return res.status(403).json({ error: "Invalid or expired setup token" });
   }
 
@@ -384,7 +391,7 @@ app.post("/setup/set-limits", async (req, res) => {
   }
 
   const setup = setupTokens.get(token);
-  if (!setup || setup.wallet.toLowerCase() !== walletAddr.toLowerCase()) {
+  if (!setup || !walletMatch(setup.wallet, walletAddr)) {
     return res.status(403).json({ error: "Invalid or expired setup token" });
   }
 
@@ -451,7 +458,7 @@ app.post("/approve/execute", requireBase, async (req, res) => {
   }
 
   const challenge = approvalChallenges.get(challengeId);
-  if (!challenge || challenge.wallet.toLowerCase() !== walletAddr.toLowerCase()) {
+  if (!challenge || !walletMatch(challenge.wallet, walletAddr)) {
     return res.status(403).json({ error: "Invalid or expired challenge" });
   }
 
