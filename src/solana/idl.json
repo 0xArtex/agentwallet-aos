@@ -100,6 +100,51 @@
       ]
     },
     {
+      "name": "execute",
+      "docs": [
+        "Execute an arbitrary instruction via CPI with the wallet PDA as signer.",
+        "This enables the agent to interact with any Solana program (Jupiter, Raydium, etc.)",
+        "while spending limits are still enforced via `amount_usdc`.",
+        "",
+        "For value-transferring txs (swaps, payments): set amount_usdc to the USD value leaving the wallet.",
+        "For free interactions (voting, staking, claiming): set amount_usdc to 0."
+      ],
+      "discriminator": [
+        130,
+        221,
+        242,
+        154,
+        13,
+        193,
+        189,
+        29
+      ],
+      "accounts": [
+        {
+          "name": "wallet",
+          "writable": true
+        },
+        {
+          "name": "agent",
+          "signer": true
+        }
+      ],
+      "args": [
+        {
+          "name": "program_id",
+          "type": "pubkey"
+        },
+        {
+          "name": "data",
+          "type": "bytes"
+        },
+        {
+          "name": "amount_usdc",
+          "type": "u64"
+        }
+      ]
+    },
+    {
       "name": "initialize_factory",
       "discriminator": [
         179,
@@ -706,6 +751,19 @@
   ],
   "events": [
     {
+      "name": "ExecuteCompleted",
+      "discriminator": [
+        14,
+        51,
+        27,
+        131,
+        22,
+        5,
+        52,
+        222
+      ]
+    },
+    {
       "name": "PolicyUpdated",
       "discriminator": [
         225,
@@ -823,6 +881,26 @@
     }
   ],
   "types": [
+    {
+      "name": "ExecuteCompleted",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "wallet",
+            "type": "pubkey"
+          },
+          {
+            "name": "program_id",
+            "type": "pubkey"
+          },
+          {
+            "name": "amount_usdc",
+            "type": "u64"
+          }
+        ]
+      }
+    },
     {
       "name": "Factory",
       "type": {

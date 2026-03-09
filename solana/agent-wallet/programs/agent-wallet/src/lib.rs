@@ -1,5 +1,7 @@
 use anchor_lang::prelude::*;
 use anchor_lang::solana_program::sysvar::instructions as ix_sysvar;
+use anchor_lang::solana_program::instruction::Instruction;
+use anchor_lang::solana_program::program::invoke_signed;
 use anchor_spl::token::{self, Token, TokenAccount, Transfer as SplTransfer};
 
 declare_id!("4XHYgv4fczfAtkKB792yrP57iakR9extKtkigsXCJm5e");
@@ -273,6 +275,89 @@ pub mod agent_wallet {
             amount_lamports: amount,
             amount_usdc,
             token: Some(mint),
+        });
+
+        Ok(())
+    }
+
+    // ─── Generic Execute (any CPI — DEX swaps, NFT mints, etc.) ───
+
+    /// Execute an arbitrary instruction via CPI with the wallet PDA as signer.
+    /// This enables the agent to interact with any Solana program (Jupiter, Raydium, etc.)
+    /// while spending limits are still enforced via `amount_usdc`.
+    ///
+    /// For value-transferring txs (swaps, payments): set amount_usdc to the USD value leaving the wallet.
+    /// For free interactions (voting, staking, claiming): set amount_usdc to 0.
+    pub fn execute<'a>(
+        ctx: Context<'_, '_, 'a, 'a, Execute<'a>>,
+        program_id: Pubkey,
+        data: Vec<u8>,
+        amount_usdc: u64,
+    ) -> Result<()> {
+        // Extract all needed wallet fields before any borrow conflicts
+        let wallet_key: Pubkey;
+        let owner_key: Pubkey;
+        let agent_key: Pubkey;
+        let index_bytes: [u8; 8];
+        let bump: u8;
+
+        {
+            let wallet = &mut ctx.accounts.wallet;
+
+            require!(!wallet.paused, WalletError::Paused);
+            require!(ctx.accounts.agent.key() == wallet.agent, WalletError::UnauthorizedAgent);
+
+            reset_daily_if_needed(wallet)?;
+
+            if amount_usdc > 0 {
+                require!(amount_usdc <= wallet.per_tx_limit, WalletError::PerTxLimitExceeded);
+                let new_spent = wallet.spent_today.checked_add(amount_usdc).ok_or(WalletError::Overflow)?;
+                require!(new_spent <= wallet.daily_limit, WalletError::DailyLimitExceeded);
+                wallet.spent_today = new_spent;
+            }
+
+            wallet_key = wallet.key();
+            owner_key = wallet.owner;
+            agent_key = wallet.agent;
+            index_bytes = wallet.index.to_le_bytes();
+            bump = wallet.bump;
+        }
+
+        // Build account metas from remaining_accounts
+        let mut account_metas = Vec::new();
+        for acc in ctx.remaining_accounts.iter() {
+            let is_signer = acc.key() == wallet_key;
+            account_metas.push(if acc.is_writable {
+                AccountMeta::new(acc.key(), is_signer)
+            } else {
+                AccountMeta::new_readonly(acc.key(), is_signer)
+            });
+        }
+
+        let ix = Instruction {
+            program_id,
+            accounts: account_metas,
+            data,
+        };
+
+        let seeds: &[&[u8]] = &[
+            WALLET_SEED,
+            owner_key.as_ref(),
+            agent_key.as_ref(),
+            &index_bytes,
+            &[bump],
+        ];
+        let signer_seeds = &[seeds];
+
+        let mut account_infos: Vec<AccountInfo> = ctx.remaining_accounts.to_vec();
+        account_infos.push(ctx.accounts.wallet.to_account_info());
+
+        invoke_signed(&ix, &account_infos, signer_seeds)?;
+
+        emit!(ExecuteCompleted {
+            wallet: wallet_key,
+            program_id,
+            amount_usdc,
         });
 
         Ok(())
@@ -591,6 +676,14 @@ pub struct TransferToken<'info> {
 }
 
 #[derive(Accounts)]
+pub struct Execute<'info> {
+    #[account(mut)]
+    pub wallet: Account<'info, Wallet>,
+    pub agent: Signer<'info>,
+    // remaining_accounts: all accounts needed by the target program CPI
+}
+
+#[derive(Accounts)]
 pub struct OwnerAction<'info> {
     #[account(mut)]
     pub wallet: Account<'info, Wallet>,
@@ -648,6 +741,13 @@ pub struct TransferExecuted {
     pub amount_lamports: u64,
     pub amount_usdc: u64,
     pub token: Option<Pubkey>,
+}
+
+#[event]
+pub struct ExecuteCompleted {
+    pub wallet: Pubkey,
+    pub program_id: Pubkey,
+    pub amount_usdc: u64,
 }
 
 #[event]
