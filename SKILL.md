@@ -19,69 +19,71 @@ Non-custodial smart wallets with onchain spending limits and passkey-based human
 
 ## End-to-End: Create a Wallet and Start Transacting
 
-### 1. Generate an agent keypair (if you don't have one)
-
-#### Base (EVM)
+### 1. Generate agent keypairs (if you don't have them)
 
 ```bash
 npx @agntos/agentwallet keygen
 ```
 
-Output:
+By default, this generates **both** Base and Solana keypairs:
+
 ```
-  New Agent Keypair
-  ─────────────────────
-  Address         0xB042...B7DC
-  Private key     0x282a...b3a3
+  New Agent Keypairs
+  ──────────────────────────
+  Base
+    Address         0xB042...B7DC
+    Private key     0x282a...b3a3
+
+  Solana
+    Address         7Kp9...xR4v
+    Private key     4vJ2...9mNq
 ```
 
-#### Solana
-
+To generate a single chain only:
 ```bash
-npx @agntos/agentwallet keygen --chain solana
-```
-
-Output:
-```
-  New Agent Keypair (Solana)
-  ─────────────────────────
-  Address         7Kp9...xR4v
-  Private key     4vJ2...9mNq
+npx @agntos/agentwallet keygen --chain base     # Base only
+npx @agntos/agentwallet keygen --chain solana    # Solana only
 ```
 
 Solana keys are Ed25519 keypairs, base58 encoded.
 
-**Save the private key immediately to secure storage.** This is the only time it's displayed.
+**Save the private keys immediately to secure storage.** This is the only time they're displayed.
 
 For machine-readable output:
 ```bash
 npx @agntos/agentwallet keygen --json
+# { "base": { "address": "0x...", "privateKey": "0x...", "chain": "base" }, "solana": { "address": "7Kp...", "privateKey": "4vJ...", "chain": "solana" } }
+
 npx @agntos/agentwallet keygen --chain solana --json
-# {"address":"...","privateKey":"...","chain":"solana"}
+# { "address": "...", "privateKey": "...", "chain": "solana" }
 ```
 
-> Already have a keypair? Skip this — use your existing public address.
+> Already have keypairs? Skip this — use your existing public addresses.
 
-### 2. Create a smart wallet
-
-#### Base
+### 2. Create smart wallets
 
 ```bash
-# Managed (human controls limits via passkey — recommended)
-npx @agntos/agentwallet create --agent 0xYOUR_PUBLIC_ADDRESS
+# Both chains — managed (recommended)
+npx @agntos/agentwallet create --agent 0xYOUR_BASE_ADDRESS --agent-sol YOUR_SOLANA_PUBKEY
 
-# Unmanaged (agent controls everything)
-npx @agntos/agentwallet create --agent 0xYOUR_PUBLIC_ADDRESS --unmanaged
+# Both chains — unmanaged
+npx @agntos/agentwallet create --agent 0xYOUR_BASE_ADDRESS --agent-sol YOUR_SOLANA_PUBKEY --unmanaged
 ```
 
-#### Solana
+The `--agent-sol` flag can also be set via `AGENTWALLET_AGENT_SOL` env var.
 
+JSON output (both chains):
+```json
+{ "base": { "wallet": "0x...", "setupUrl": "..." }, "solana": { "wallet": "...", "setupUrl": "..." } }
+```
+
+To create a single chain only:
 ```bash
-# Managed
+# Base only
+npx @agntos/agentwallet create --chain base --agent 0xYOUR_BASE_ADDRESS
+
+# Solana only
 npx @agntos/agentwallet create --chain solana --agent YOUR_SOLANA_PUBKEY
-
-# Unmanaged
-npx @agntos/agentwallet create --chain solana --agent YOUR_SOLANA_PUBKEY --unmanaged
 ```
 
 **Managed wallets** return a `setupUrl` — send it to your human. They set limits and register their passkey (FaceID/YubiKey). One-time setup.
@@ -217,11 +219,13 @@ Once approved, **all agent transactions revert** until unpaused.
 ## All Commands
 
 ```bash
-npx @agntos/agentwallet keygen                        # generate Base keypair
-npx @agntos/agentwallet keygen --chain solana          # generate Solana keypair
-npx @agntos/agentwallet create --agent 0x...          # managed wallet (Base)
-npx @agntos/agentwallet create --chain solana --agent PUBKEY  # managed wallet (Solana)
-npx @agntos/agentwallet create --agent 0x... --unmanaged  # autonomous wallet
+npx @agntos/agentwallet keygen                        # generate BOTH Base + Solana keypairs
+npx @agntos/agentwallet keygen --chain base            # generate Base keypair only
+npx @agntos/agentwallet keygen --chain solana          # generate Solana keypair only
+npx @agntos/agentwallet create --agent 0x... --agent-sol Sol...  # managed wallets (both chains)
+npx @agntos/agentwallet create --chain base --agent 0x...        # managed wallet (Base only)
+npx @agntos/agentwallet create --chain solana --agent PUBKEY     # managed wallet (Solana only)
+npx @agntos/agentwallet create --agent 0x... --unmanaged         # autonomous wallet
 npx @agntos/agentwallet status 0xWALLET               # wallet info (auto-detects chain)
 npx @agntos/agentwallet limits 0xWALLET --daily N --pertx N --reason "..."
 npx @agntos/agentwallet token-limit 0xWALLET --token 0x... --token-daily N --token-pertx N
