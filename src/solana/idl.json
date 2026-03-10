@@ -1009,6 +1009,13 @@
             "type": "pubkey"
           },
           {
+            "name": "seed_owner",
+            "docs": [
+              "Original owner used in PDA seed derivation (immutable after creation)"
+            ],
+            "type": "pubkey"
+          },
+          {
             "name": "agent",
             "type": "pubkey"
           },

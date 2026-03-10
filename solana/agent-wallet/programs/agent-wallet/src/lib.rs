@@ -70,6 +70,8 @@ impl Factory {
 #[account]
 pub struct Wallet {
     pub owner: Pubkey,
+    /// Original owner used in PDA seed derivation (immutable after creation)
+    pub seed_owner: Pubkey,
     pub agent: Pubkey,
     pub index: u64,
     pub daily_limit: u64,
@@ -86,7 +88,7 @@ pub struct Wallet {
 }
 
 impl Wallet {
-    pub const SIZE: usize = 8 + 32 + 32 + 8 + 8 + 8 + 8 + 8 + 1 + 1 + 64 + 1 + 4 + (MAX_TOKEN_LIMITS * TokenLimit::SIZE);
+    pub const SIZE: usize = 8 + 32 + 32 + 32 + 8 + 8 + 8 + 8 + 8 + 1 + 1 + 64 + 1 + 4 + (MAX_TOKEN_LIMITS * TokenLimit::SIZE);
 }
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone, Default)]
@@ -127,6 +129,7 @@ pub mod agent_wallet {
         let wallet = &mut ctx.accounts.wallet;
 
         wallet.owner = ctx.accounts.owner.key();
+        wallet.seed_owner = ctx.accounts.owner.key();
         wallet.agent = ctx.accounts.agent.key();
         wallet.index = factory.total_wallets;
         wallet.daily_limit = daily_limit;
@@ -142,7 +145,7 @@ pub mod agent_wallet {
         factory.total_wallets = factory.total_wallets.checked_add(1).ok_or(WalletError::Overflow)?;
 
         let wallet_key = wallet.key();
-        let owner_key = wallet.owner;
+        let owner_key = wallet.seed_owner;
         let agent_key = wallet.agent;
         let idx = wallet.index;
 
@@ -242,7 +245,7 @@ pub mod agent_wallet {
         let wallet_key = wallet.key();
         let recipient_key = ctx.accounts.recipient_token_account.key();
 
-        let owner_key = wallet.owner;
+        let owner_key = wallet.seed_owner;
         let agent_key = wallet.agent;
         let index_bytes = wallet.index.to_le_bytes();
         let bump = wallet.bump;
@@ -317,15 +320,24 @@ pub mod agent_wallet {
             }
 
             wallet_key = wallet.key();
-            owner_key = wallet.owner;
+            owner_key = wallet.seed_owner;
             agent_key = wallet.agent;
             index_bytes = wallet.index.to_le_bytes();
             bump = wallet.bump;
         }
 
-        // Build account metas from remaining_accounts
+        // Build CPI instruction from remaining_accounts.
+        // remaining_accounts should contain:
+        //   1. All accounts needed by the target instruction (in order), including wallet PDA
+        //   2. The target program's account (last) — needed for invoke_signed but excluded from metas
+        //
+        // Wallet PDA is auto-marked as signer. Target program is auto-excluded from metas.
         let mut account_metas = Vec::new();
         for acc in ctx.remaining_accounts.iter() {
+            // Skip the target program — it's not an instruction account
+            if acc.key() == program_id {
+                continue;
+            }
             let is_signer = acc.key() == wallet_key;
             account_metas.push(if acc.is_writable {
                 AccountMeta::new(acc.key(), is_signer)
@@ -349,8 +361,12 @@ pub mod agent_wallet {
         ];
         let signer_seeds = &[seeds];
 
+        // All account_infos: remaining_accounts (includes target program) + wallet PDA
+        let wallet_info = ctx.accounts.wallet.to_account_info();
         let mut account_infos: Vec<AccountInfo> = ctx.remaining_accounts.to_vec();
-        account_infos.push(ctx.accounts.wallet.to_account_info());
+        if !account_infos.iter().any(|a| a.key() == wallet_key) {
+            account_infos.push(wallet_info);
+        }
 
         invoke_signed(&ix, &account_infos, signer_seeds)?;
 
@@ -449,7 +465,7 @@ pub mod agent_wallet {
         let amount = ctx.accounts.wallet_token_account.amount;
         if amount == 0 { return Ok(()); }
 
-        let owner_key = wallet.owner;
+        let owner_key = wallet.seed_owner;
         let agent_key = wallet.agent;
         let index_bytes = wallet.index.to_le_bytes();
         let bump = wallet.bump;

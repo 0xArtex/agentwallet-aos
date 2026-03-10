@@ -286,6 +286,58 @@ app.post("/wallet/:address/topup", requireBase, async (req, res) => {
   }
 });
 
+// ─── Solana Transfer SOL ───
+app.post("/wallet/:address/transfer-sol", async (req, res) => {
+  if (!solanaClient) return res.status(503).json({ error: "Solana not configured" });
+  const { address } = req.params;
+  const { agentPrivateKey, recipient, amountLamports, amountUsdc } = req.body;
+  if (!agentPrivateKey || !recipient || !amountLamports || amountUsdc === undefined) {
+    return res.status(400).json({ error: "agentPrivateKey, recipient, amountLamports, amountUsdc required" });
+  }
+  try {
+    const agentKeypair = Keypair.fromSecretKey(bs58.decode(agentPrivateKey));
+    const tx = await solanaClient.transferSol(address, agentKeypair, recipient, amountLamports, amountUsdc);
+    res.json({ success: true, txHash: tx });
+  } catch (err: any) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// ─── Solana Transfer Token ───
+app.post("/wallet/:address/transfer-token", async (req, res) => {
+  if (!solanaClient) return res.status(503).json({ error: "Solana not configured" });
+  const { address } = req.params;
+  const { agentPrivateKey, mint, walletTokenAccount, recipientTokenAccount, amount, amountUsdc } = req.body;
+  if (!agentPrivateKey || !mint || !walletTokenAccount || !recipientTokenAccount || !amount || amountUsdc === undefined) {
+    return res.status(400).json({ error: "agentPrivateKey, mint, walletTokenAccount, recipientTokenAccount, amount, amountUsdc required" });
+  }
+  try {
+    const agentKeypair = Keypair.fromSecretKey(bs58.decode(agentPrivateKey));
+    const tx = await solanaClient.transferToken(address, agentKeypair, mint, walletTokenAccount, recipientTokenAccount, amount, amountUsdc);
+    res.json({ success: true, txHash: tx });
+  } catch (err: any) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// ─── Solana Execute (arbitrary CPI — DEX swaps, etc.) ───
+app.post("/wallet/:address/execute", async (req, res) => {
+  if (!solanaClient) return res.status(503).json({ error: "Solana not configured" });
+  const { address } = req.params;
+  const { agentPrivateKey, programId, instructionData, amountUsdc, accounts } = req.body;
+  if (!agentPrivateKey || !programId || !instructionData || !accounts) {
+    return res.status(400).json({ error: "agentPrivateKey, programId, instructionData (base64), accounts [{pubkey, isSigner, isWritable}], amountUsdc required" });
+  }
+  try {
+    const agentKeypair = Keypair.fromSecretKey(bs58.decode(agentPrivateKey));
+    const data = Buffer.from(instructionData, "base64");
+    const tx = await solanaClient.execute(address, agentKeypair, programId, data, amountUsdc || 0, accounts);
+    res.json({ success: true, txHash: tx });
+  } catch (err: any) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
 // ─── Stats ───
 app.get("/stats", async (_req, res) => {
   try {

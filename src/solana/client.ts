@@ -203,6 +203,99 @@ export class SolanaWalletClient {
     return tx;
   }
 
+  /** Transfer SOL from wallet (agent signs) */
+  async transferSol(
+    walletAddress: string,
+    agentKeypair: Keypair,
+    recipient: string,
+    amountLamports: number,
+    amountUsdc: number,
+  ): Promise<string> {
+    const walletPubkey = new PublicKey(walletAddress);
+    const recipientPubkey = new PublicKey(recipient);
+
+    const tx = await this.program.methods
+      .transferSol(new BN(amountUsdc), new BN(amountLamports))
+      .accounts({
+        wallet: walletPubkey,
+        agent: agentKeypair.publicKey,
+        recipient: recipientPubkey,
+      })
+      .signers([agentKeypair])
+      .rpc();
+
+    return tx;
+  }
+
+  /** Transfer SPL token from wallet (agent signs) */
+  async transferToken(
+    walletAddress: string,
+    agentKeypair: Keypair,
+    mint: string,
+    walletTokenAccount: string,
+    recipientTokenAccount: string,
+    amount: number,
+    amountUsdc: number,
+  ): Promise<string> {
+    const walletPubkey = new PublicKey(walletAddress);
+    const mintPubkey = new PublicKey(mint);
+    const walletTA = new PublicKey(walletTokenAccount);
+    const recipientTA = new PublicKey(recipientTokenAccount);
+
+    // Derive PDA signer seeds from wallet account
+    const walletAccount = await (this.program.account as any)["wallet"].fetch(walletPubkey);
+    const ownerKey = walletAccount.owner as PublicKey;
+    const agentKey = walletAccount.agent as PublicKey;
+    const index = walletAccount.index;
+    const bump = walletAccount.bump;
+
+    const tx = await this.program.methods
+      .transferToken(new BN(amount), new BN(amountUsdc))
+      .accounts({
+        wallet: walletPubkey,
+        agent: agentKeypair.publicKey,
+        mint: mintPubkey,
+        walletTokenAccount: walletTA,
+        recipientTokenAccount: recipientTA,
+        tokenProgram: new PublicKey("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"),
+      })
+      .signers([agentKeypair])
+      .rpc();
+
+    return tx;
+  }
+
+  /** Execute arbitrary CPI from wallet (agent signs) — for DEX swaps, etc. */
+  async execute(
+    walletAddress: string,
+    agentKeypair: Keypair,
+    targetProgramId: string,
+    instructionData: Buffer,
+    amountUsdc: number,
+    remainingAccounts: Array<{ pubkey: string; isSigner: boolean; isWritable: boolean }>,
+  ): Promise<string> {
+    const walletPubkey = new PublicKey(walletAddress);
+    const targetProgram = new PublicKey(targetProgramId);
+
+    const accountMetas = remainingAccounts.map(acc => ({
+      pubkey: new PublicKey(acc.pubkey),
+      isSigner: acc.isSigner,
+      isWritable: acc.isWritable,
+    }));
+
+    const tx = await this.program.methods
+      .execute(targetProgram, instructionData, new BN(amountUsdc))
+      .accounts({
+        wallet: walletPubkey,
+        agent: agentKeypair.publicKey,
+      })
+      .remainingAccounts(accountMetas)
+      .signers([agentKeypair])
+      .rpc();
+
+    return tx;
+  }
+
   /** Transfer ownership (admin must be current owner — final setup step) */
   async transferOwnership(walletAddress: string, newOwner: string): Promise<string> {
     const walletPubkey = new PublicKey(walletAddress);
