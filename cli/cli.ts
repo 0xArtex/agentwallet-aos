@@ -92,6 +92,7 @@ ${c.bold}Commands${c.reset}
   ${c.cyan}rm-token${c.reset} ${c.dim}<wallet>${c.reset}   Remove a token limit
   ${c.cyan}pause${c.reset} ${c.dim}<wallet>${c.reset}      Request emergency pause
   ${c.cyan}unpause${c.reset} ${c.dim}<wallet>${c.reset}    Request unpause
+  ${c.cyan}execute${c.reset}             Execute arbitrary contract call / CPI
   ${c.cyan}keygen${c.reset}              Generate a new agent keypair
   ${c.cyan}stats${c.reset}               Total wallets deployed
 
@@ -440,6 +441,84 @@ function keccak256(data: Uint8Array): Buffer {
   return Buffer.from(keccak_256(data))
 }
 
+async function cmdExecute(aw: AgentWallet, positional: string[], flags: Record<string, string | boolean>) {
+  const wallet = flags.wallet as string || positional[0]
+  const program = flags.program as string || flags.target as string
+  const key = flags.key as string || process.env.AGENTWALLET_KEY as string
+  const chain = flags.chain as string || 'base'
+  const data = flags.data as string || ''
+  const value = flags.value as string || '0'
+  const accounts = flags.accounts as string
+  const amountUsdc = parseInt(flags['amount-usdc'] as string || '0')
+
+  if (!wallet || !program || !key) {
+    console.error(`
+${c.bold}Usage:${c.reset} agentwallet execute --wallet <ADDR> --program <TARGET> --key <KEY>
+
+${c.dim}Execute an arbitrary contract call / CPI from your wallet.${c.reset}
+
+  --wallet       Smart wallet address
+  --program      Target contract (Base) or program (Solana)
+  --key          Agent private key (or AGENTWALLET_KEY env)
+  --chain        base or solana (default: base)
+  --data         Calldata: hex 0x... (Base) or base64 (Solana)
+  --value        Native value: wei (Base) or lamports (Solana)
+
+${c.dim}Solana-specific:${c.reset}
+  --accounts     JSON array: [{"pubkey":"...","isSigner":false,"isWritable":true}]
+  --amount-usdc  USD value for spending limit tracking
+
+${c.dim}Examples:${c.reset}
+  agentwallet execute --wallet 0xW --program 0xC --data 0xabcd --key 0xK
+  agentwallet execute --wallet SolW --program Prog --data <b64> --accounts '[...]' --key <b58> --chain solana
+`)
+    process.exit(1)
+  }
+
+  if (chain === 'solana') {
+    if (!accounts) { error('--accounts required for Solana execute'); process.exit(1) }
+    let parsed: any[]
+    try { parsed = JSON.parse(accounts) } catch { error('--accounts must be valid JSON'); process.exit(1) }
+
+    const result = await aw.execute(wallet, {
+      agentPrivateKey: key,
+      programId: program,
+      instructionData: data,
+      accounts: parsed,
+      amountUsdc,
+    })
+    if (flags.json) return console.log(JSON.stringify(result, null, 2))
+    header('Execute (Solana)')
+    row('Tx', result.txHash, c.green)
+    row('Program', program, c.dim)
+    console.log()
+  } else {
+    // Base: direct contract call (ethers must be installed by the user)
+    let ethers: any
+    try { ethers = (await import('ethers' as any)).ethers || (await import('ethers' as any)) } catch { error('ethers package required for Base execute: npm i ethers'); process.exit(1) }
+    const RPC = process.env.AGENTWALLET_RPC || 'https://mainnet.base.org'
+    const provider = new ethers.JsonRpcProvider(RPC)
+    const signer = new ethers.Wallet(key, provider)
+
+    const contract = new ethers.Contract(wallet, [
+      'function execute(address to, uint256 value, bytes calldata data) external'
+    ], signer)
+
+    const calldata = data || '0x'
+    const val = BigInt(value)
+
+    const tx = await contract.execute(program, val, calldata)
+    const receipt = await tx.wait()
+
+    if (flags.json) return console.log(JSON.stringify({ tx: receipt.hash, target: program, value, data: calldata }, null, 2))
+    header('Execute (Base)')
+    row('Tx', receipt.hash, c.green)
+    row('Target', program, c.dim)
+    if (val > 0n) row('Value', value + ' wei', c.yellow)
+    console.log()
+  }
+}
+
 async function cmdStats(aw: AgentWallet, flags: Record<string, string | boolean>) {
   const data = await aw.stats()
   if (flags.json) return console.log(JSON.stringify(data, null, 2))
@@ -476,6 +555,8 @@ async function main() {
         await cmdPause(aw, positional, flags); break
       case 'unpause': case 'resume':
         await cmdUnpause(aw, positional, flags); break
+      case 'execute': case 'exec': case 'call':
+        await cmdExecute(aw, positional, flags); break
       case 'stats':
         await cmdStats(aw, flags); break
       default:

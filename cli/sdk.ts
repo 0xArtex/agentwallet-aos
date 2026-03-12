@@ -161,6 +161,39 @@ export class AgentWallet {
       ...(reason ? { reason } : {}),
     })
   }
+
+  /** Execute arbitrary CPI from wallet (Solana) */
+  async execute(wallet: string, opts: {
+    agentPrivateKey: string
+    programId: string
+    instructionData: string // base64
+    accounts: Array<{ pubkey: string; isSigner: boolean; isWritable: boolean }>
+    amountUsdc?: number
+  }): Promise<{ success: boolean; txHash: string }> {
+    return this.request('POST', `/${wallet}/execute`, opts)
+  }
+
+  /** Transfer SOL from wallet (Solana) */
+  async transferSol(wallet: string, opts: {
+    agentPrivateKey: string
+    to: string
+    lamports: number
+    amountUsdc?: number
+  }): Promise<{ success: boolean; txHash: string }> {
+    return this.request('POST', `/${wallet}/transfer-sol`, opts)
+  }
+
+  /** Transfer SPL token from wallet (Solana) */
+  async transferToken(wallet: string, opts: {
+    agentPrivateKey: string
+    mint: string
+    walletTokenAccount: string
+    recipientTokenAccount: string
+    amount: number
+    amountUsdc?: number
+  }): Promise<{ success: boolean; txHash: string }> {
+    return this.request('POST', `/${wallet}/transfer-token`, opts)
+  }
 }
 
 export default AgentWallet
