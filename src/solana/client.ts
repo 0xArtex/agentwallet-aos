@@ -187,6 +187,23 @@ export class SolanaWalletClient {
     return tx;
   }
 
+  /** Set per-token spending limits (owner/admin must sign) */
+  async setTokenLimit(walletAddress: string, mint: string, dailyLimit: number, perTxLimit: number): Promise<string> {
+    const walletPubkey = new PublicKey(walletAddress);
+    const mintPubkey = new PublicKey(mint);
+
+    const tx = await this.program.methods
+      .setTokenLimit(mintPubkey, new BN(dailyLimit), new BN(perTxLimit))
+      .accounts({
+        wallet: walletPubkey,
+        owner: this.adminKeypair.publicKey,
+      })
+      .signers([this.adminKeypair])
+      .rpc();
+
+    return tx;
+  }
+
   /** Register passkey on a wallet (admin must be current owner) */
   async registerPasskey(walletAddress: string, passkeyPubkey: number[]): Promise<string> {
     const walletPubkey = new PublicKey(walletAddress);
